@@ -1,4 +1,4 @@
-import { Listenable, PromisePlus } from "./internal";
+import { ProtocolMsg, Listenable, PromisePlus } from "./internal";
 export declare enum Event {
     ON_CONNECTING = 100,
     ON_CONNECTED = 101,
@@ -23,7 +23,15 @@ export interface IOptions {
     sslEnabled?: boolean;
     debugRoundEnabled?: boolean;
 }
-export type ProtocolMsg = any;
+export declare class Options implements IOptions {
+    readonly reconnectDelay: number;
+    readonly heartbeatInterval: number;
+    readonly defaultRoundTimeout: number;
+    readonly retryRouteCount: number;
+    readonly sslEnabled: boolean;
+    readonly debugRoundEnabled: boolean;
+    constructor(options?: IOptions);
+}
 export declare class Connection extends Listenable {
     private _endpoint;
     private _options;
@@ -35,7 +43,7 @@ export declare class Connection extends Listenable {
     private _attachments;
     private _condition;
     private _websocket;
-    constructor(endpoint: string, options: IOptions);
+    constructor(endpoint: string, options: Options);
     close(): void;
     isOpen(): boolean;
     waitUntilOpen(): Promise<void>;
