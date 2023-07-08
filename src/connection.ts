@@ -1,5 +1,11 @@
 import { msg_types, encode_msg, decode_msg } from "maxwell-protocol";
-import { Timer, Condition, Listenable, PromisePlus } from "./internal";
+import {
+  ProtocolMsg,
+  Timer,
+  Condition,
+  Listenable,
+  PromisePlus,
+} from "./internal";
 
 const WebSocketImpl =
   typeof WebSocket !== "undefined" ? WebSocket : require("ws");
@@ -36,7 +42,7 @@ export interface IOptions {
   debugRoundEnabled?: boolean;
 }
 
-class Options implements IOptions {
+export class Options implements IOptions {
   readonly reconnectDelay: number;
   readonly heartbeatInterval: number;
   readonly defaultRoundTimeout: number;
@@ -81,9 +87,6 @@ class Options implements IOptions {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type ProtocolMsg = any;
-
 // [resolve, reject, msg, retryRouteCount, timer|null]
 type Attachment = [
   (value: ProtocolMsg) => void,
@@ -108,11 +111,11 @@ export class Connection extends Listenable {
   //===========================================
   // APIs
   //===========================================
-  constructor(endpoint: string, options: IOptions) {
+  constructor(endpoint: string, options: Options) {
     super();
 
     this._endpoint = endpoint;
-    this._options = new Options(options);
+    this._options = options;
 
     this._shouldRun = true;
     this._heartbeatTimer = null;
