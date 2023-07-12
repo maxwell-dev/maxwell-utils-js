@@ -33,8 +33,9 @@ export declare class Options implements IOptions {
     constructor(options?: IOptions);
 }
 export declare class Connection extends Listenable {
-    private _endpoint;
+    private _endpoints;
     private _options;
+    private _currentEndpointIndex;
     private _shouldRun;
     private _heartbeatTimer;
     private _reconnectTimer;
@@ -43,11 +44,10 @@ export declare class Connection extends Listenable {
     private _attachments;
     private _condition;
     private _websocket;
-    constructor(endpoint: string, options: Options);
+    constructor(endpoints: string[], options: Options);
     close(): void;
     isOpen(): boolean;
-    waitUntilOpen(): Promise<void>;
-    getEndpoint(): string;
+    waitOpen(): Promise<void>;
     request(msg: ProtocolMsg, timeout?: number): PromisePlus;
     send(msg: ProtocolMsg): void;
     private _onOpen;
@@ -65,6 +65,8 @@ export declare class Connection extends Listenable {
     private _createPingReq;
     private _newRef;
     private _now;
+    private _nextEndpoint;
+    private _currentEndpoint;
     private _buildUrl;
     private _deleteAttachment;
 }

@@ -97,8 +97,9 @@ type Attachment = [
 ];
 
 export class Connection extends Listenable {
-  private _endpoint: string;
+  private _endpoints: string[];
   private _options: Options;
+  private _currentEndpointIndex: number;
   private _shouldRun: boolean;
   private _heartbeatTimer: Timer | null;
   private _reconnectTimer: Timer | null;
@@ -111,12 +112,14 @@ export class Connection extends Listenable {
   //===========================================
   // APIs
   //===========================================
-  constructor(endpoint: string, options: Options) {
+  constructor(endpoints: string[], options: Options) {
     super();
-
-    this._endpoint = endpoint;
+    if (endpoints.length < 1) {
+      throw new Error("endpoints should not be empty");
+    }
+    this._endpoints = endpoints;
     this._options = options;
-
+    this._currentEndpointIndex = endpoints.length - 1;
     this._shouldRun = true;
     this._heartbeatTimer = null;
     this._reconnectTimer = null;
@@ -142,12 +145,8 @@ export class Connection extends Listenable {
     return this._websocket !== null && this._websocket.readyState === 1;
   }
 
-  async waitUntilOpen(): Promise<void> {
+  async waitOpen(): Promise<void> {
     await this._condition.wait();
-  }
-
-  getEndpoint(): string {
-    return this._endpoint;
   }
 
   request(msg: ProtocolMsg, timeout?: number): PromisePlus {
@@ -217,19 +216,21 @@ export class Connection extends Listenable {
   // websocket callbacks
   //===========================================
   private _onOpen() {
+    console.log(`Connection connected: endpoint: ${this._currentEndpoint()}`);
     this._repeatSendHeartbeat();
-    console.log(`Connection connected: endpoint: ${this._endpoint}`);
     this._condition.notify();
     this.notify(Event.ON_CONNECTED);
   }
 
   private _onClose() {
+    console.log(
+      `Connection disconnected: endpoint: ${this._currentEndpoint()}`
+    );
     this._stopSendHeartbeat();
+    this.notify(Event.ON_DISCONNECTED);
     if (this._shouldRun) {
       this._reconnect();
     }
-    console.log(`Connection disconnected: endpoint: ${this._endpoint}`);
-    this.notify(Event.ON_DISCONNECTED);
   }
 
   // eslint-disable-next-line
@@ -294,7 +295,9 @@ export class Connection extends Listenable {
 
   private _onError(e: any) {
     console.error(
-      `Failed to connect: endpoint: ${this._endpoint}, error: ${e.message}`
+      `Failed to connect: endpoint: ${this._currentEndpoint()}, error: ${
+        e.message
+      }`
     );
     this.notify(Event.ON_ERROR, Code.FAILED_TO_CONNECT);
   }
@@ -304,7 +307,7 @@ export class Connection extends Listenable {
   //===========================================
 
   private _connect() {
-    console.log(`Connecting: endpoint: ${this._endpoint}`);
+    console.log(`Connecting: endpoint: ${this._nextEndpoint()}`);
     this.notify(Event.ON_CONNECTING);
     const websocket = new WebSocketImpl(this._buildUrl());
     websocket.binaryType = "arraybuffer";
@@ -316,7 +319,7 @@ export class Connection extends Listenable {
   }
 
   private _disconnect() {
-    console.log(`Disconnecting: endpoint: ${this._endpoint}`);
+    console.log(`Disconnecting: endpoint: ${this._currentEndpoint()}`);
     this.notify(Event.ON_DISCONNECTING);
     if (this._websocket !== null) {
       this._websocket.close();
@@ -377,11 +380,23 @@ export class Connection extends Listenable {
     return new Date().getTime();
   }
 
+  private _nextEndpoint() {
+    this._currentEndpointIndex++;
+    if (this._currentEndpointIndex >= this._endpoints.length) {
+      this._currentEndpointIndex = 0;
+    }
+    return this._endpoints[this._currentEndpointIndex];
+  }
+
+  private _currentEndpoint() {
+    return this._endpoints[this._currentEndpointIndex];
+  }
+
   private _buildUrl() {
     if (this._options.sslEnabled) {
-      return `wss://${this._endpoint}/ws`;
+      return `wss://${this._currentEndpoint()}/ws`;
     } else {
-      return `ws://${this._endpoint}/ws`;
+      return `ws://${this._currentEndpoint()}/ws`;
     }
   }
 
