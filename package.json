@@ -1,6 +1,6 @@
 {
   "name": "maxwell-utils-js",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "Maxwell utils implementation for js/ts.",
   "author": "Chaoqian Xu <chaoranxu@gmail.com>",
   "license": "MIT",
@@ -19,7 +19,7 @@
   ],
   "repository": "https://github.com/maxwell-dev/maxwell-utils-js.git",
   "dependencies": {
-    "maxwell-protocol": "https://github.com/maxwell-dev/maxwell-protocol-js.git#v1.2.0",
+    "maxwell-protocol": "https://github.com/maxwell-dev/maxwell-protocol-js.git#v1.2.2",
     "ws": "8.13.0"
   },
   "devDependencies": {
