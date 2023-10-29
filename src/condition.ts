@@ -28,7 +28,7 @@ export class Condition {
       }),
       new Promise<boolean>((_, reject) => {
         if (typeof msg === "undefined") {
-          msg = `Timeout waiting: waiter ${waiterId}`;
+          msg = `Timeout to wait: waiter: ${waiterId}`;
         } else {
           msg = JSON.stringify(msg).substring(0, 100);
         }

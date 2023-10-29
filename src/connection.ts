@@ -4,6 +4,7 @@ import {
   Timer,
   Condition,
   Listenable,
+  IListenable,
   PromisePlus,
 } from "./internal";
 
@@ -19,7 +20,7 @@ export enum Event {
   ON_ERROR = 1,
 }
 
-export enum Code {
+export enum ErrorCode {
   FAILED_TO_ENCODE = 1,
   FAILED_TO_SEND = 2,
   FAILED_TO_DECODE = 3,
@@ -93,13 +94,21 @@ type Attachment = [
   (reason?: Error) => void,
   ProtocolMsg,
   number,
-  Timer | null
+  Timer | null,
 ];
 
-export class Connection extends Listenable {
-  private _endpoints: string[];
+export interface IConnection extends IListenable {
+  close(): void;
+  isOpen(): boolean;
+  waitOpen(): Promise<void>;
+  endpoint(): string;
+  request(msg: ProtocolMsg, timeout?: number): PromisePlus;
+  send(msg: ProtocolMsg): void;
+}
+
+export class Connection extends Listenable implements IConnection {
+  private _endpoint: string;
   private _options: Options;
-  private _currentEndpointIndex: number;
   private _shouldRun: boolean;
   private _heartbeatTimer: Timer | null;
   private _reconnectTimer: Timer | null;
@@ -112,14 +121,10 @@ export class Connection extends Listenable {
   //===========================================
   // APIs
   //===========================================
-  constructor(endpoints: string[], options: Options) {
+  constructor(endpoint: string, options: Options) {
     super();
-    if (endpoints.length < 1) {
-      throw new Error("endpoints should not be empty");
-    }
-    this._endpoints = endpoints;
+    this._endpoint = endpoint;
     this._options = options;
-    this._currentEndpointIndex = endpoints.length - 1;
     this._shouldRun = true;
     this._heartbeatTimer = null;
     this._reconnectTimer = null;
@@ -147,6 +152,10 @@ export class Connection extends Listenable {
 
   async waitOpen(): Promise<void> {
     await this._condition.wait();
+  }
+
+  endpoint(): string {
+    return this._endpoint;
   }
 
   request(msg: ProtocolMsg, timeout?: number): PromisePlus {
@@ -191,14 +200,14 @@ export class Connection extends Listenable {
     } catch (e: any) {
       const errorMsg = `Failed to encode msg: reason: ${e.stack}`;
       console.error(errorMsg);
-      this.notify(Event.ON_ERROR, Code.FAILED_TO_ENCODE);
+      this.notify(Event.ON_ERROR, this, ErrorCode.FAILED_TO_ENCODE);
       throw new Error(errorMsg);
     }
 
     if (this._websocket == null) {
       const errorMsg = `Failed to send msg: reason: connection lost`;
       console.error(errorMsg);
-      this.notify(Event.ON_ERROR, Code.FAILED_TO_SEND);
+      this.notify(Event.ON_ERROR, this, ErrorCode.FAILED_TO_SEND);
       throw new Error(errorMsg);
     }
     try {
@@ -207,7 +216,7 @@ export class Connection extends Listenable {
     } catch (e: any) {
       const errorMsg = `Failed to send msg: reason: ${e.stack}`;
       console.error(errorMsg);
-      this.notify(Event.ON_ERROR, Code.FAILED_TO_SEND);
+      this.notify(Event.ON_ERROR, this, ErrorCode.FAILED_TO_SEND);
       throw new Error(errorMsg);
     }
   }
@@ -216,18 +225,16 @@ export class Connection extends Listenable {
   // websocket callbacks
   //===========================================
   private _onOpen() {
-    console.log(`Connection connected: endpoint: ${this._currentEndpoint()}`);
+    console.log(`Connection connected: endpoint: ${this._endpoint}`);
     this._repeatSendHeartbeat();
     this._condition.notify();
-    this.notify(Event.ON_CONNECTED);
+    this.notify(Event.ON_CONNECTED, this);
   }
 
   private _onClose() {
-    console.log(
-      `Connection disconnected: endpoint: ${this._currentEndpoint()}`
-    );
+    console.log(`Connection disconnected: endpoint: ${this._endpoint}`);
     this._stopSendHeartbeat();
-    this.notify(Event.ON_DISCONNECTED);
+    this.notify(Event.ON_DISCONNECTED, this);
     if (this._shouldRun) {
       this._reconnect();
     }
@@ -241,7 +248,7 @@ export class Connection extends Listenable {
       msg = decode_msg(event.data);
     } catch (e: any) {
       console.error(`Failed to decode msg: reason: ${e.stack}`);
-      this.notify(Event.ON_ERROR, Code.FAILED_TO_DECODE);
+      this.notify(Event.ON_ERROR, this, ErrorCode.FAILED_TO_DECODE);
       return;
     }
 
@@ -295,11 +302,9 @@ export class Connection extends Listenable {
 
   private _onError(e: any) {
     console.error(
-      `Failed to connect: endpoint: ${this._currentEndpoint()}, error: ${
-        e.message
-      }`
+      `Failed to connect: endpoint: ${this._endpoint}, error: ${e.message}`
     );
-    this.notify(Event.ON_ERROR, Code.FAILED_TO_CONNECT);
+    this.notify(Event.ON_ERROR, ErrorCode.FAILED_TO_CONNECT);
   }
 
   //===========================================
@@ -307,8 +312,8 @@ export class Connection extends Listenable {
   //===========================================
 
   private _connect() {
-    console.log(`Connecting: endpoint: ${this._nextEndpoint()}`);
-    this.notify(Event.ON_CONNECTING);
+    console.log(`Connecting: endpoint: ${this._endpoint}`);
+    this.notify(Event.ON_CONNECTING, this);
     const websocket = new WebSocketImpl(this._buildUrl());
     websocket.binaryType = "arraybuffer";
     websocket.onopen = this._onOpen.bind(this);
@@ -319,8 +324,8 @@ export class Connection extends Listenable {
   }
 
   private _disconnect() {
-    console.log(`Disconnecting: endpoint: ${this._currentEndpoint()}`);
-    this.notify(Event.ON_DISCONNECTING);
+    console.log(`Disconnecting: endpoint: ${this._endpoint}`);
+    this.notify(Event.ON_DISCONNECTING, this);
     if (this._websocket !== null) {
       this._websocket.close();
       this._websocket = null;
@@ -380,23 +385,11 @@ export class Connection extends Listenable {
     return new Date().getTime();
   }
 
-  private _nextEndpoint() {
-    this._currentEndpointIndex++;
-    if (this._currentEndpointIndex >= this._endpoints.length) {
-      this._currentEndpointIndex = 0;
-    }
-    return this._endpoints[this._currentEndpointIndex];
-  }
-
-  private _currentEndpoint() {
-    return this._endpoints[this._currentEndpointIndex];
-  }
-
   private _buildUrl() {
     if (this._options.sslEnabled) {
-      return `wss://${this._currentEndpoint()}/$ws`;
+      return `wss://${this._endpoint}/$ws`;
     } else {
-      return `ws://${this._currentEndpoint()}/$ws`;
+      return `ws://${this._endpoint}/$ws`;
     }
   }
 

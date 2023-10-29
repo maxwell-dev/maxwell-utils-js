@@ -2,13 +2,20 @@ import { ProtocolMsg, Timer } from "./types";
 import { Condition } from "./condition";
 import { TimeoutError } from "./timeout-error";
 import { PromisePlus } from "./promise-plus";
-import { Listenable } from "./listenable";
-import { Connection, Code, Event, IOptions, Options } from "./connection";
+import { Listenable, IListenable } from "./listenable";
+import {
+  Connection,
+  IConnection,
+  ErrorCode,
+  Event,
+  IOptions,
+  Options,
+} from "./connection";
 
 export {
   ProtocolMsg,
   Timer,
-  Code,
+  ErrorCode,
   Event,
   Condition,
   IOptions,
@@ -16,5 +23,7 @@ export {
   TimeoutError,
   PromisePlus,
   Listenable,
+  IListenable,
   Connection,
+  IConnection,
 };

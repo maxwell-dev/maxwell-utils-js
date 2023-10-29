@@ -1,4 +1,4 @@
-import { ProtocolMsg, Listenable, PromisePlus } from "./internal";
+import { ProtocolMsg, Listenable, IListenable, PromisePlus } from "./internal";
 export declare enum Event {
     ON_CONNECTING = 100,
     ON_CONNECTED = 101,
@@ -7,7 +7,7 @@ export declare enum Event {
     ON_MESSAGE = 104,
     ON_ERROR = 1
 }
-export declare enum Code {
+export declare enum ErrorCode {
     FAILED_TO_ENCODE = 1,
     FAILED_TO_SEND = 2,
     FAILED_TO_DECODE = 3,
@@ -32,10 +32,17 @@ export declare class Options implements IOptions {
     readonly debugRoundEnabled: boolean;
     constructor(options?: IOptions);
 }
-export declare class Connection extends Listenable {
-    private _endpoints;
+export interface IConnection extends IListenable {
+    close(): void;
+    isOpen(): boolean;
+    waitOpen(): Promise<void>;
+    endpoint(): string;
+    request(msg: ProtocolMsg, timeout?: number): PromisePlus;
+    send(msg: ProtocolMsg): void;
+}
+export declare class Connection extends Listenable implements IConnection {
+    private _endpoint;
     private _options;
-    private _currentEndpointIndex;
     private _shouldRun;
     private _heartbeatTimer;
     private _reconnectTimer;
@@ -44,10 +51,11 @@ export declare class Connection extends Listenable {
     private _attachments;
     private _condition;
     private _websocket;
-    constructor(endpoints: string[], options: Options);
+    constructor(endpoint: string, options: Options);
     close(): void;
     isOpen(): boolean;
     waitOpen(): Promise<void>;
+    endpoint(): string;
     request(msg: ProtocolMsg, timeout?: number): PromisePlus;
     send(msg: ProtocolMsg): void;
     private _onOpen;
@@ -65,8 +73,6 @@ export declare class Connection extends Listenable {
     private _createPingReq;
     private _newRef;
     private _now;
-    private _nextEndpoint;
-    private _currentEndpoint;
     private _buildUrl;
     private _deleteAttachment;
 }

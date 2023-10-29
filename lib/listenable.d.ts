@@ -1,12 +1,21 @@
 type Event = any;
 type Result = any;
-type Callback = (result?: Result) => void;
-export declare class Listenable {
-    private listeners;
-    constructor();
+type Callback = (...args: Result[]) => void;
+type UnListen = () => void;
+export interface IListenable {
     addListener(event: Event, callback: Callback): void;
     deleteListener(event: Event, callback: Callback): void;
     clear(): void;
-    notify(event: Event, result?: Result): void;
+    getListeners(): Map<Event, Callback[]>;
+    notify(event: Event, ...args: Result[]): void;
+}
+export declare class Listenable implements IListenable {
+    private _listeners;
+    constructor();
+    addListener(event: Event, callback: Callback): UnListen;
+    deleteListener(event: Event, callback: Callback): void;
+    clear(): void;
+    getListeners(): Map<Event, Callback[]>;
+    notify(event: Event, ...args: Result[]): void;
 }
 export default Listenable;
