@@ -24,12 +24,12 @@ export declare enum Event {
     ON_DISCONNECTED = 103,
     ON_CORRUPTED = 104
 }
-export interface EventHandler {
-    onConnecting(connection: IConnection): void;
-    onConnected(connection: IConnection): void;
-    onDisconnecting(connection: IConnection): void;
-    onDisconnected(connection: IConnection): void;
-    onCorrupted(connection: IConnection): void;
+export interface IEventHandler {
+    onConnecting(connection: IConnection, ...rest: any[]): void;
+    onConnected(connection: IConnection, ...rest: any[]): void;
+    onDisconnecting(connection: IConnection, ...rest: any[]): void;
+    onDisconnected(connection: IConnection, ...rest: any[]): void;
+    onCorrupted(connection: IConnection, ...rest: any[]): void;
 }
 export interface IConnection extends IListenable {
     close(): void;
@@ -51,7 +51,7 @@ export declare class Connection extends Listenable implements IConnection {
     private _attachments;
     private _condition;
     private _websocket;
-    constructor(endpoint: string, options: Options, eventHandler?: EventHandler);
+    constructor(endpoint: string, options: Options, eventHandler?: IEventHandler);
     close(): void;
     endpoint(): string;
     isOpen(): boolean;
@@ -77,15 +77,16 @@ export declare class Connection extends Listenable implements IConnection {
     private _deleteAttachment;
 }
 type PickEndpoint = () => AbortablePromise<string>;
-export declare class MultiAltEndpointsConnection extends Listenable implements IConnection, EventHandler {
+export declare class MultiAltEndpointsConnection extends Listenable implements IConnection, IEventHandler {
     private _pickEndpoint;
     private _options;
+    private _eventHandler;
     private _shouldRun;
     private _connectPromise;
     private _reconnectTimer;
     private _connection;
     private _condition;
-    constructor(pickEndpoint: PickEndpoint, options: Options);
+    constructor(pickEndpoint: PickEndpoint, options: Options, eventHandler?: IEventHandler);
     close(): void;
     endpoint(): string | undefined;
     isOpen(): boolean;

@@ -4,7 +4,7 @@ import { TimeoutError } from "./timeout-error";
 import { Listenable, IListenable } from "./listenable";
 import {
   Event,
-  EventHandler,
+  IEventHandler,
   IOptions,
   Options,
   IConnection,
@@ -16,7 +16,7 @@ export {
   ProtocolMsg,
   Timer,
   Event,
-  EventHandler,
+  IEventHandler,
   Condition,
   IOptions,
   Options,

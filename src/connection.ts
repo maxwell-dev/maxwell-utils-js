@@ -79,15 +79,15 @@ export enum Event {
   ON_CORRUPTED = 104,
 }
 
-export interface EventHandler {
-  onConnecting(connection: IConnection): void;
-  onConnected(connection: IConnection): void;
-  onDisconnecting(connection: IConnection): void;
-  onDisconnected(connection: IConnection): void;
-  onCorrupted(connection: IConnection): void;
+export interface IEventHandler {
+  onConnecting(connection: IConnection, ...rest: any[]): void;
+  onConnected(connection: IConnection, ...rest: any[]): void;
+  onDisconnecting(connection: IConnection, ...rest: any[]): void;
+  onDisconnected(connection: IConnection, ...rest: any[]): void;
+  onCorrupted(connection: IConnection, ...rest: any[]): void;
 }
 
-class DefaultEventHandler implements EventHandler {
+class DefaultEventHandler implements IEventHandler {
   onConnecting(): void {}
   onConnected(): void {}
   onDisconnecting(): void {}
@@ -116,7 +116,7 @@ export interface IConnection extends IListenable {
 export class Connection extends Listenable implements IConnection {
   private _endpoint: string;
   private _options: Options;
-  private _eventHandler: EventHandler;
+  private _eventHandler: IEventHandler;
   private _shouldRun: boolean;
   private _heartbeatTimer: Timer | null;
   private _reconnectTimer: Timer | null;
@@ -132,7 +132,7 @@ export class Connection extends Listenable implements IConnection {
   constructor(
     endpoint: string,
     options: Options,
-    eventHandler: EventHandler = new DefaultEventHandler()
+    eventHandler: IEventHandler = new DefaultEventHandler()
   ) {
     super();
     this._endpoint = endpoint;
@@ -430,20 +430,26 @@ type PickEndpoint = () => AbortablePromise<string>;
 
 export class MultiAltEndpointsConnection
   extends Listenable
-  implements IConnection, EventHandler
+  implements IConnection, IEventHandler
 {
   private _pickEndpoint: PickEndpoint;
   private _options: Options;
+  private _eventHandler: IEventHandler;
   private _shouldRun: boolean;
   private _connectPromise: AbortablePromise<void> | null;
   private _reconnectTimer: Timer | null;
   private _connection: Connection | null;
   private _condition: Condition;
 
-  constructor(pickEndpoint: PickEndpoint, options: Options) {
+  constructor(
+    pickEndpoint: PickEndpoint,
+    options: Options,
+    eventHandler: IEventHandler = new DefaultEventHandler()
+  ) {
     super();
     this._pickEndpoint = pickEndpoint;
     this._options = options;
+    this._eventHandler = eventHandler;
     this._shouldRun = true;
     this._connection = null;
     this._connectPromise = null;
@@ -488,24 +494,29 @@ export class MultiAltEndpointsConnection
   }
 
   onConnecting(connection: IConnection): void {
+    this._eventHandler.onConnecting(this, connection);
     this.notify(Event.ON_CONNECTING, this, connection);
   }
 
   onConnected(connection: IConnection): void {
     this._condition.notify();
+    this._eventHandler.onConnected(this, connection);
     this.notify(Event.ON_CONNECTED, this, connection);
   }
 
   onDisconnecting(connection: IConnection): void {
+    this._eventHandler.onDisconnecting(this, connection);
     this.notify(Event.ON_DISCONNECTING, this, connection);
   }
 
   onDisconnected(connection: IConnection): void {
+    this._eventHandler.onDisconnected(this, connection);
     this.notify(Event.ON_CONNECTED, this, connection);
   }
 
   onCorrupted(connection: IConnection): void {
     this._reconnect();
+    this._eventHandler.onCorrupted(this, connection);
     this.notify(Event.ON_CORRUPTED, this, connection);
   }
 
