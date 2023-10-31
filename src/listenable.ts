@@ -2,16 +2,14 @@
 type Event = any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Result = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Callback = (...args: Result[]) => void;
-
 type UnListen = () => void;
 
 export interface IListenable {
   addListener(event: Event, callback: Callback): void;
   deleteListener(event: Event, callback: Callback): void;
   clear(): void;
-  getListeners(): Map<Event, Callback[]>;
+  listeners(): Map<Event, Callback[]>;
   notify(event: Event, ...args: Result[]): void;
 }
 
@@ -60,7 +58,7 @@ export class Listenable implements IListenable {
     this._listeners.clear();
   }
 
-  getListeners(): Map<Event, Callback[]> {
+  listeners(): Map<Event, Callback[]> {
     return this._listeners;
   }
 

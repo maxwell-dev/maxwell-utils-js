@@ -1,3 +1,4 @@
+import { AbortablePromise } from "@xuchaoqian/abortable-promise";
 import { msg_types, encode_msg, decode_msg } from "maxwell-protocol";
 import {
   ProtocolMsg,
@@ -5,29 +6,11 @@ import {
   Condition,
   Listenable,
   IListenable,
-  PromisePlus,
+  TimeoutError,
 } from "./internal";
 
 const WebSocketImpl =
   typeof WebSocket !== "undefined" ? WebSocket : require("ws");
-
-export enum Event {
-  ON_CONNECTING = 100,
-  ON_CONNECTED = 101,
-  ON_DISCONNECTING = 102,
-  ON_DISCONNECTED = 103,
-  ON_MESSAGE = 104,
-  ON_ERROR = 1,
-}
-
-export enum ErrorCode {
-  FAILED_TO_ENCODE = 1,
-  FAILED_TO_SEND = 2,
-  FAILED_TO_DECODE = 3,
-  FAILED_TO_RECEIVE = 4,
-  FAILED_TO_CONNECT = 5,
-  UNKNOWN_ERROR = 6,
-}
 
 export interface IOptions {
   reconnectDelay?: number;
@@ -88,6 +71,30 @@ export class Options implements IOptions {
   }
 }
 
+export enum Event {
+  ON_CONNECTING = 100,
+  ON_CONNECTED = 101,
+  ON_DISCONNECTING = 102,
+  ON_DISCONNECTED = 103,
+  ON_CORRUPTED = 104,
+}
+
+export interface EventHandler {
+  onConnecting(connection: IConnection): void;
+  onConnected(connection: IConnection): void;
+  onDisconnecting(connection: IConnection): void;
+  onDisconnected(connection: IConnection): void;
+  onCorrupted(connection: IConnection): void;
+}
+
+class DefaultEventHandler implements EventHandler {
+  onConnecting(): void {}
+  onConnected(): void {}
+  onDisconnecting(): void {}
+  onDisconnected(): void {}
+  onCorrupted(): void {}
+}
+
 // [resolve, reject, msg, retryRouteCount, timer|null]
 type Attachment = [
   (value: ProtocolMsg) => void,
@@ -99,16 +106,17 @@ type Attachment = [
 
 export interface IConnection extends IListenable {
   close(): void;
+  endpoint(): string | undefined;
   isOpen(): boolean;
-  waitOpen(): Promise<void>;
-  endpoint(): string;
-  request(msg: ProtocolMsg, timeout?: number): PromisePlus;
+  waitOpen(timeout?: number): Promise<void>;
+  request(msg: ProtocolMsg, timeout?: number): AbortablePromise<ProtocolMsg>;
   send(msg: ProtocolMsg): void;
 }
 
 export class Connection extends Listenable implements IConnection {
   private _endpoint: string;
   private _options: Options;
+  private _eventHandler: EventHandler;
   private _shouldRun: boolean;
   private _heartbeatTimer: Timer | null;
   private _reconnectTimer: Timer | null;
@@ -121,10 +129,15 @@ export class Connection extends Listenable implements IConnection {
   //===========================================
   // APIs
   //===========================================
-  constructor(endpoint: string, options: Options) {
+  constructor(
+    endpoint: string,
+    options: Options,
+    eventHandler: EventHandler = new DefaultEventHandler()
+  ) {
     super();
     this._endpoint = endpoint;
     this._options = options;
+    this._eventHandler = eventHandler;
     this._shouldRun = true;
     this._heartbeatTimer = null;
     this._reconnectTimer = null;
@@ -146,46 +159,51 @@ export class Connection extends Listenable implements IConnection {
     this._attachments.clear();
   }
 
-  isOpen(): boolean {
-    return this._websocket !== null && this._websocket.readyState === 1;
-  }
-
-  async waitOpen(): Promise<void> {
-    await this._condition.wait();
-  }
-
   endpoint(): string {
     return this._endpoint;
   }
 
-  request(msg: ProtocolMsg, timeout?: number): PromisePlus {
-    const ref = this._newRef();
+  isOpen(): boolean {
+    return this._websocket !== null && this._websocket.readyState === 1;
+  }
 
-    msg.ref = ref;
+  async waitOpen(timeout?: number): Promise<void> {
+    await this._condition.wait(timeout);
+  }
 
+  request(msg: ProtocolMsg, timeout?: number): AbortablePromise<ProtocolMsg> {
     if (typeof timeout === "undefined") {
       timeout = this._options.defaultRoundTimeout;
     }
 
-    const pp = new PromisePlus(
-      (resolve, reject) => {
-        this._attachments.set(ref, [resolve, reject, msg, 0, null]);
-      },
-      timeout,
-      msg
-    ).catch((reason) => {
-      this._deleteAttachment(ref);
-      throw reason;
-    });
+    const ref = this._newRef();
+    msg.ref = ref;
+
+    let timer: Timer;
+    const promise = new AbortablePromise((resolve, reject) => {
+      this._attachments.set(ref, [resolve, reject, msg, 0, null]);
+      timer = setTimeout(() => {
+        reject(new TimeoutError(JSON.stringify(msg).substring(0, 100)));
+      }, timeout);
+    })
+      .then((value) => {
+        this._deleteAttachment(ref);
+        clearTimeout(timer as number);
+        return value;
+      })
+      .catch((reason) => {
+        this._deleteAttachment(ref);
+        clearTimeout(timer as number);
+        throw reason;
+      });
 
     try {
       this.send(msg);
     } catch (reason: any) {
-      this._deleteAttachment(ref);
-      throw reason;
+      promise.abort(reason);
     }
 
-    return pp.then((result) => result);
+    return promise;
   }
 
   send(msg: ProtocolMsg): void {
@@ -198,25 +216,22 @@ export class Connection extends Listenable implements IConnection {
     try {
       encodedMsg = encode_msg(msg);
     } catch (e: any) {
-      const errorMsg = `Failed to encode msg: reason: ${e.stack}`;
+      const errorMsg = `Failed to encode msg: reason: ${e.message}`;
       console.error(errorMsg);
-      this.notify(Event.ON_ERROR, this, ErrorCode.FAILED_TO_ENCODE);
       throw new Error(errorMsg);
     }
 
     if (this._websocket == null) {
       const errorMsg = `Failed to send msg: reason: connection lost`;
       console.error(errorMsg);
-      this.notify(Event.ON_ERROR, this, ErrorCode.FAILED_TO_SEND);
       throw new Error(errorMsg);
     }
     try {
       this._websocket.send(encodedMsg);
       this._sentAt = this._now();
     } catch (e: any) {
-      const errorMsg = `Failed to send msg: reason: ${e.stack}`;
+      const errorMsg = `Failed to send msg: reason: ${e.message}`;
       console.error(errorMsg);
-      this.notify(Event.ON_ERROR, this, ErrorCode.FAILED_TO_SEND);
       throw new Error(errorMsg);
     }
   }
@@ -228,12 +243,16 @@ export class Connection extends Listenable implements IConnection {
     console.log(`Connection connected: endpoint: ${this._endpoint}`);
     this._repeatSendHeartbeat();
     this._condition.notify();
+    this._eventHandler.onConnected(this);
     this.notify(Event.ON_CONNECTED, this);
   }
 
   private _onClose() {
-    console.log(`Connection disconnected: endpoint: ${this._endpoint}`);
+    if (!process.env.RUN_IN_JEST) {
+      console.log(`Connection disconnected: endpoint: ${this._endpoint}`);
+    }
     this._stopSendHeartbeat();
+    this._eventHandler.onDisconnected(this);
     this.notify(Event.ON_DISCONNECTED, this);
     if (this._shouldRun) {
       this._reconnect();
@@ -247,8 +266,7 @@ export class Connection extends Listenable implements IConnection {
     try {
       msg = decode_msg(event.data);
     } catch (e: any) {
-      console.error(`Failed to decode msg: reason: ${e.stack}`);
-      this.notify(Event.ON_ERROR, this, ErrorCode.FAILED_TO_DECODE);
+      console.error(`Failed to decode msg: reason: ${e.message}`);
       return;
     }
 
@@ -302,9 +320,10 @@ export class Connection extends Listenable implements IConnection {
 
   private _onError(e: any) {
     console.error(
-      `Failed to connect: endpoint: ${this._endpoint}, error: ${e.message}`
+      `Connection corrupted: endpoint: ${this._endpoint}, error: ${e.message}`
     );
-    this.notify(Event.ON_ERROR, ErrorCode.FAILED_TO_CONNECT);
+    this._eventHandler.onCorrupted(this);
+    this.notify(Event.ON_CORRUPTED, this);
   }
 
   //===========================================
@@ -313,6 +332,7 @@ export class Connection extends Listenable implements IConnection {
 
   private _connect() {
     console.log(`Connecting: endpoint: ${this._endpoint}`);
+    this._eventHandler.onConnecting(this);
     this.notify(Event.ON_CONNECTING, this);
     const websocket = new WebSocketImpl(this._buildUrl());
     websocket.binaryType = "arraybuffer";
@@ -325,6 +345,7 @@ export class Connection extends Listenable implements IConnection {
 
   private _disconnect() {
     console.log(`Disconnecting: endpoint: ${this._endpoint}`);
+    this._eventHandler.onDisconnecting(this);
     this.notify(Event.ON_DISCONNECTING, this);
     if (this._websocket !== null) {
       this._websocket.close();
@@ -402,6 +423,120 @@ export class Connection extends Listenable implements IConnection {
       clearTimeout(attachments[4] as number);
     }
     this._attachments.delete(ref);
+  }
+}
+
+type PickEndpoint = () => AbortablePromise<string>;
+
+export class MultiAltEndpointsConnection
+  extends Listenable
+  implements IConnection, EventHandler
+{
+  private _pickEndpoint: PickEndpoint;
+  private _options: Options;
+  private _shouldRun: boolean;
+  private _connectPromise: AbortablePromise<void> | null;
+  private _reconnectTimer: Timer | null;
+  private _connection: Connection | null;
+  private _condition: Condition;
+
+  constructor(pickEndpoint: PickEndpoint, options: Options) {
+    super();
+    this._pickEndpoint = pickEndpoint;
+    this._options = options;
+    this._shouldRun = true;
+    this._connection = null;
+    this._connectPromise = null;
+    this._reconnectTimer = null;
+    this._connect();
+    this._condition = new Condition(() => {
+      return this.isOpen();
+    });
+  }
+
+  close(): void {
+    this._shouldRun = false;
+    this._stopReconnect();
+    this._connectPromise?.abort();
+    this._condition.clear();
+    this._connection?.close();
+  }
+
+  endpoint(): string | undefined {
+    return this._connection?.endpoint();
+  }
+
+  isOpen(): boolean {
+    return this._connection !== null && this._connection.isOpen();
+  }
+
+  waitOpen(timeout?: number): Promise<void> {
+    return this._condition.wait(timeout);
+  }
+
+  request(
+    msg: any,
+    timeout?: number | undefined
+  ): AbortablePromise<ProtocolMsg> {
+    return AbortablePromise.from(this._condition.wait(timeout)).then(() => {
+      return this._connection!.request(msg, timeout);
+    });
+  }
+
+  send(msg: any): void {
+    return this._connection!.send(msg);
+  }
+
+  onConnecting(connection: IConnection): void {
+    this.notify(Event.ON_CONNECTING, this, connection);
+  }
+
+  onConnected(connection: IConnection): void {
+    this._condition.notify();
+    this.notify(Event.ON_CONNECTED, this, connection);
+  }
+
+  onDisconnecting(connection: IConnection): void {
+    this.notify(Event.ON_DISCONNECTING, this, connection);
+  }
+
+  onDisconnected(connection: IConnection): void {
+    this.notify(Event.ON_CONNECTED, this, connection);
+  }
+
+  onCorrupted(connection: IConnection): void {
+    this._reconnect();
+    this.notify(Event.ON_CORRUPTED, this, connection);
+  }
+
+  private _connect() {
+    this._connectPromise = this._pickEndpoint()
+      .then((endpiont) => {
+        const oldConnection = this._connection;
+        this._connection = new Connection(endpiont, this._options, this);
+        oldConnection?.close();
+      })
+      .catch((reason) => {
+        console.error(`Failed to pick endpoint: ${reason.stack}`);
+        this._reconnect();
+      });
+  }
+
+  private _reconnect() {
+    if (!this._shouldRun) {
+      return;
+    }
+    this._reconnectTimer = setTimeout(
+      this._connect.bind(this),
+      this._options.reconnectDelay
+    );
+  }
+
+  private _stopReconnect() {
+    if (this._reconnectTimer !== null) {
+      clearTimeout(this._reconnectTimer as number);
+      this._reconnectTimer = null;
+    }
   }
 }
 

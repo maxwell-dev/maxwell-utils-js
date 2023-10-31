@@ -1,20 +1,5 @@
-import { ProtocolMsg, Listenable, IListenable, PromisePlus } from "./internal";
-export declare enum Event {
-    ON_CONNECTING = 100,
-    ON_CONNECTED = 101,
-    ON_DISCONNECTING = 102,
-    ON_DISCONNECTED = 103,
-    ON_MESSAGE = 104,
-    ON_ERROR = 1
-}
-export declare enum ErrorCode {
-    FAILED_TO_ENCODE = 1,
-    FAILED_TO_SEND = 2,
-    FAILED_TO_DECODE = 3,
-    FAILED_TO_RECEIVE = 4,
-    FAILED_TO_CONNECT = 5,
-    UNKNOWN_ERROR = 6
-}
+import { AbortablePromise } from "@xuchaoqian/abortable-promise";
+import { ProtocolMsg, Listenable, IListenable } from "./internal";
 export interface IOptions {
     reconnectDelay?: number;
     heartbeatInterval?: number;
@@ -32,17 +17,32 @@ export declare class Options implements IOptions {
     readonly debugRoundEnabled: boolean;
     constructor(options?: IOptions);
 }
+export declare enum Event {
+    ON_CONNECTING = 100,
+    ON_CONNECTED = 101,
+    ON_DISCONNECTING = 102,
+    ON_DISCONNECTED = 103,
+    ON_CORRUPTED = 104
+}
+export interface EventHandler {
+    onConnecting(connection: IConnection): void;
+    onConnected(connection: IConnection): void;
+    onDisconnecting(connection: IConnection): void;
+    onDisconnected(connection: IConnection): void;
+    onCorrupted(connection: IConnection): void;
+}
 export interface IConnection extends IListenable {
     close(): void;
+    endpoint(): string | undefined;
     isOpen(): boolean;
-    waitOpen(): Promise<void>;
-    endpoint(): string;
-    request(msg: ProtocolMsg, timeout?: number): PromisePlus;
+    waitOpen(timeout?: number): Promise<void>;
+    request(msg: ProtocolMsg, timeout?: number): AbortablePromise<ProtocolMsg>;
     send(msg: ProtocolMsg): void;
 }
 export declare class Connection extends Listenable implements IConnection {
     private _endpoint;
     private _options;
+    private _eventHandler;
     private _shouldRun;
     private _heartbeatTimer;
     private _reconnectTimer;
@@ -51,12 +51,12 @@ export declare class Connection extends Listenable implements IConnection {
     private _attachments;
     private _condition;
     private _websocket;
-    constructor(endpoint: string, options: Options);
+    constructor(endpoint: string, options: Options, eventHandler?: EventHandler);
     close(): void;
-    isOpen(): boolean;
-    waitOpen(): Promise<void>;
     endpoint(): string;
-    request(msg: ProtocolMsg, timeout?: number): PromisePlus;
+    isOpen(): boolean;
+    waitOpen(timeout?: number): Promise<void>;
+    request(msg: ProtocolMsg, timeout?: number): AbortablePromise<ProtocolMsg>;
     send(msg: ProtocolMsg): void;
     private _onOpen;
     private _onClose;
@@ -75,5 +75,30 @@ export declare class Connection extends Listenable implements IConnection {
     private _now;
     private _buildUrl;
     private _deleteAttachment;
+}
+type PickEndpoint = () => AbortablePromise<string>;
+export declare class MultiAltEndpointsConnection extends Listenable implements IConnection, EventHandler {
+    private _pickEndpoint;
+    private _options;
+    private _shouldRun;
+    private _connectPromise;
+    private _reconnectTimer;
+    private _connection;
+    private _condition;
+    constructor(pickEndpoint: PickEndpoint, options: Options);
+    close(): void;
+    endpoint(): string | undefined;
+    isOpen(): boolean;
+    waitOpen(timeout?: number): Promise<void>;
+    request(msg: any, timeout?: number | undefined): AbortablePromise<ProtocolMsg>;
+    send(msg: any): void;
+    onConnecting(connection: IConnection): void;
+    onConnected(connection: IConnection): void;
+    onDisconnecting(connection: IConnection): void;
+    onDisconnected(connection: IConnection): void;
+    onCorrupted(connection: IConnection): void;
+    private _connect;
+    private _reconnect;
+    private _stopReconnect;
 }
 export default Connection;

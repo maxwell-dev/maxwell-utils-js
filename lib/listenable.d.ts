@@ -6,7 +6,7 @@ export interface IListenable {
     addListener(event: Event, callback: Callback): void;
     deleteListener(event: Event, callback: Callback): void;
     clear(): void;
-    getListeners(): Map<Event, Callback[]>;
+    listeners(): Map<Event, Callback[]>;
     notify(event: Event, ...args: Result[]): void;
 }
 export declare class Listenable implements IListenable {
@@ -15,7 +15,7 @@ export declare class Listenable implements IListenable {
     addListener(event: Event, callback: Callback): UnListen;
     deleteListener(event: Event, callback: Callback): void;
     clear(): void;
-    getListeners(): Map<Event, Callback[]>;
+    listeners(): Map<Event, Callback[]>;
     notify(event: Event, ...args: Result[]): void;
 }
 export default Listenable;

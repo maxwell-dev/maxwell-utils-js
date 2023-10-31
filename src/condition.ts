@@ -1,8 +1,7 @@
 import { Timer, TimeoutError } from "./internal";
 
 type Cond = () => boolean;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Watier = [(value: true) => void, (reason?: any) => void];
+type Watier = [() => void, (reason?: unknown) => void];
 
 export class Condition {
   private _cond: Cond;
@@ -15,18 +14,18 @@ export class Condition {
     this._waiterId = 0;
   }
 
-  async wait(timeout = 5000, msg?: string): Promise<boolean> {
+  async wait(timeout = 5000, msg?: string): Promise<void> {
     if (this._cond()) {
-      return Promise.resolve(true);
+      return Promise.resolve();
     }
 
     let timer: Timer;
     const waiterId = this._nextWaiterId();
     return Promise.race([
-      new Promise<boolean>((resolve, reject) => {
+      new Promise<void>((resolve, reject) => {
         this._waiters.set(waiterId, [resolve, reject]);
       }),
-      new Promise<boolean>((_, reject) => {
+      new Promise<void>((_, reject) => {
         if (typeof msg === "undefined") {
           msg = `Timeout to wait: waiter: ${waiterId}`;
         } else {
@@ -49,13 +48,12 @@ export class Condition {
 
   notify(): void {
     this._waiters.forEach((waiter) => {
-      waiter[0](true);
+      waiter[0]();
     });
     this.clear();
   }
 
-  // eslint-disable-next-line
-  throw(reason: any): void {
+  throw(reason: unknown): void {
     this._waiters.forEach((waiter) => {
       waiter[1](reason);
     });

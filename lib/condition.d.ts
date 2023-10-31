@@ -4,9 +4,9 @@ export declare class Condition {
     private _waiters;
     private _waiterId;
     constructor(cond: Cond);
-    wait(timeout?: number, msg?: string): Promise<boolean>;
+    wait(timeout?: number, msg?: string): Promise<void>;
     notify(): void;
-    throw(reason: any): void;
+    throw(reason: unknown): void;
     clear(): void;
     private _nextWaiterId;
 }
