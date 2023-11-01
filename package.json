@@ -1,6 +1,6 @@
 {
   "name": "maxwell-utils",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "Maxwell utils implementation for js/ts.",
   "author": "Chaoqian Xu <chaoranxu@gmail.com>",
   "license": "MIT",
@@ -21,7 +21,7 @@
   "dependencies": {
     "maxwell-protocol": "1.3.0",
     "ws": "8.14.2",
-    "@xuchaoqian/abortable-promise": "1.3.3"
+    "@xuchaoqian/abortable-promise": "1.4.0"
   },
   "devDependencies": {
     "@babel/cli": "7.23.0",
