@@ -157,6 +157,26 @@ describe("MultiAltEndpointsConnection", () => {
     }
   });
 
+  it("timeout to request", async () => {
+    const conn = new MultiAltEndpointsConnection(
+      () => AbortablePromise.resolve("localhost:10000"),
+      new Options()
+    );
+    expect(conn).toBeInstanceOf(MultiAltEndpointsConnection);
+    try {
+      await conn.waitOpen(1000);
+      const req = new msg_types.ping_req_t({});
+      const request = conn.request(req, 2000);
+      expect(request).toBeInstanceOf(AbortablePromise);
+      await request;
+    } catch (e) {
+      expect(e).toBeInstanceOf(TimeoutError);
+      expect(e.message).toEqual(`{"ref":1}`);
+    } finally {
+      conn.close();
+    }
+  });
+
   it("on connected", async () => {
     const conn = new MultiAltEndpointsConnection(
       () => AbortablePromise.resolve("localhost:10000"),

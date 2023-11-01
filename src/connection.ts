@@ -484,9 +484,7 @@ export class MultiAltEndpointsConnection
     msg: any,
     timeout?: number | undefined
   ): AbortablePromise<ProtocolMsg> {
-    return AbortablePromise.from(this._condition.wait(timeout)).then(() => {
-      return this._connection!.request(msg, timeout);
-    });
+    return this._connection!.request(msg, timeout);
   }
 
   send(msg: any): void {
