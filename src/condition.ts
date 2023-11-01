@@ -1,3 +1,4 @@
+import { AbortablePromise } from "@xuchaoqian/abortable-promise";
 import { Timer, TimeoutError } from "./internal";
 
 type Cond = () => boolean;
@@ -14,26 +15,23 @@ export class Condition {
     this._waiterId = 0;
   }
 
-  async wait(timeout = 5000, msg?: string): Promise<void> {
+  wait(timeout = 5000, msg?: string): AbortablePromise<void> {
     if (this._cond()) {
-      return Promise.resolve();
+      return AbortablePromise.resolve();
     }
-
-    let timer: Timer;
     const waiterId = this._nextWaiterId();
-    return Promise.race([
-      new Promise<void>((resolve, reject) => {
-        this._waiters.set(waiterId, [resolve, reject]);
-      }),
-      new Promise<void>((_, reject) => {
+    let timer: Timer;
+    return new AbortablePromise<void>((resolve, reject) => {
+      this._waiters.set(waiterId, [resolve, reject]);
+      timer = setTimeout(() => {
         if (typeof msg === "undefined") {
           msg = `Timeout to wait: waiter: ${waiterId}`;
         } else {
           msg = JSON.stringify(msg).substring(0, 100);
         }
-        timer = setTimeout(() => reject(new TimeoutError(msg)), timeout);
-      }),
-    ])
+        reject(new TimeoutError(msg));
+      }, timeout);
+    })
       .then((value) => {
         clearTimeout(timer as number);
         this._waiters.delete(waiterId);

@@ -108,7 +108,7 @@ export interface IConnection extends IListenable {
   close(): void;
   endpoint(): string | undefined;
   isOpen(): boolean;
-  waitOpen(timeout?: number): Promise<void>;
+  waitOpen(timeout?: number): AbortablePromise<void>;
   request(msg: ProtocolMsg, timeout?: number): AbortablePromise<ProtocolMsg>;
   send(msg: ProtocolMsg): void;
 }
@@ -167,8 +167,8 @@ export class Connection extends Listenable implements IConnection {
     return this._websocket !== null && this._websocket.readyState === 1;
   }
 
-  async waitOpen(timeout?: number): Promise<void> {
-    await this._condition.wait(timeout);
+  waitOpen(timeout?: number): AbortablePromise<void> {
+    return this._condition.wait(timeout);
   }
 
   request(msg: ProtocolMsg, timeout?: number): AbortablePromise<ProtocolMsg> {
@@ -441,6 +441,10 @@ export class MultiAltEndpointsConnection
   private _connection: Connection | null;
   private _condition: Condition;
 
+  //===========================================
+  // APIs
+  //===========================================
+
   constructor(
     pickEndpoint: PickEndpoint,
     options: Options,
@@ -476,7 +480,7 @@ export class MultiAltEndpointsConnection
     return this._connection !== null && this._connection.isOpen();
   }
 
-  waitOpen(timeout?: number): Promise<void> {
+  waitOpen(timeout?: number): AbortablePromise<void> {
     return this._condition.wait(timeout);
   }
 
@@ -490,6 +494,10 @@ export class MultiAltEndpointsConnection
   send(msg: any): void {
     return this._connection!.send(msg);
   }
+
+  //===========================================
+  // IEventHandler implementation
+  //===========================================
 
   onConnecting(connection: IConnection): void {
     this._eventHandler.onConnecting(this, connection);
@@ -517,6 +525,10 @@ export class MultiAltEndpointsConnection
     this._eventHandler.onCorrupted(this, connection);
     this.notify(Event.ON_CORRUPTED, this, connection);
   }
+
+  //===========================================
+  // internal functions
+  //===========================================
 
   private _connect() {
     this._connectPromise = this._pickEndpoint()

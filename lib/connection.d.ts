@@ -35,7 +35,7 @@ export interface IConnection extends IListenable {
     close(): void;
     endpoint(): string | undefined;
     isOpen(): boolean;
-    waitOpen(timeout?: number): Promise<void>;
+    waitOpen(timeout?: number): AbortablePromise<void>;
     request(msg: ProtocolMsg, timeout?: number): AbortablePromise<ProtocolMsg>;
     send(msg: ProtocolMsg): void;
 }
@@ -55,7 +55,7 @@ export declare class Connection extends Listenable implements IConnection {
     close(): void;
     endpoint(): string;
     isOpen(): boolean;
-    waitOpen(timeout?: number): Promise<void>;
+    waitOpen(timeout?: number): AbortablePromise<void>;
     request(msg: ProtocolMsg, timeout?: number): AbortablePromise<ProtocolMsg>;
     send(msg: ProtocolMsg): void;
     private _onOpen;
@@ -90,7 +90,7 @@ export declare class MultiAltEndpointsConnection extends Listenable implements I
     close(): void;
     endpoint(): string | undefined;
     isOpen(): boolean;
-    waitOpen(timeout?: number): Promise<void>;
+    waitOpen(timeout?: number): AbortablePromise<void>;
     request(msg: any, timeout?: number | undefined): AbortablePromise<ProtocolMsg>;
     send(msg: any): void;
     onConnecting(connection: IConnection): void;
