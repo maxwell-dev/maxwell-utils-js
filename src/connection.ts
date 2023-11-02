@@ -517,7 +517,7 @@ export class MultiAltEndpointsConnection
 
   onDisconnected(connection: IConnection): void {
     this._eventHandler.onDisconnected(this, connection);
-    this.notify(Event.ON_CONNECTED, this, connection);
+    this.notify(Event.ON_DISCONNECTED, this, connection);
   }
 
   onCorrupted(connection: IConnection): void {
