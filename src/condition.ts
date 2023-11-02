@@ -2,26 +2,28 @@ import { AbortablePromise } from "@xuchaoqian/abortable-promise";
 import { Timer, TimeoutError } from "./internal";
 
 type Cond = () => boolean;
-type Watier = [() => void, (reason?: unknown) => void];
+type Watier<T> = [(target: T) => void, (reason?: unknown) => void];
 
-export class Condition {
+export class Condition<T> {
+  private _target: T;
   private _cond: Cond;
-  private _waiters: Map<number, Watier>;
+  private _waiters: Map<number, Watier<T>>;
   private _waiterId: number;
 
-  constructor(cond: Cond) {
+  constructor(target: T, cond: Cond) {
+    this._target = target;
     this._cond = cond;
     this._waiters = new Map();
     this._waiterId = 0;
   }
 
-  wait(timeout = 5000, msg?: string): AbortablePromise<void> {
+  wait(timeout = 5000, msg?: string): AbortablePromise<T> {
     if (this._cond()) {
-      return AbortablePromise.resolve();
+      return AbortablePromise.resolve(this._target);
     }
     const waiterId = this._nextWaiterId();
     let timer: Timer;
-    return new AbortablePromise<void>((resolve, reject) => {
+    return new AbortablePromise<T>((resolve, reject) => {
       this._waiters.set(waiterId, [resolve, reject]);
       timer = setTimeout(() => {
         if (typeof msg === "undefined") {
@@ -46,7 +48,7 @@ export class Condition {
 
   notify(): void {
     this._waiters.forEach((waiter) => {
-      waiter[0]();
+      waiter[0](this._target);
     });
     this.clear();
   }

@@ -1,1 +1,1 @@
-# maxwell-utils-js
+# maxwell-utils

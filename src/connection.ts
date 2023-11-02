@@ -108,7 +108,7 @@ export interface IConnection extends IListenable {
   close(): void;
   endpoint(): string | undefined;
   isOpen(): boolean;
-  waitOpen(timeout?: number): AbortablePromise<void>;
+  waitOpen(timeout?: number): AbortablePromise<IConnection>;
   request(msg: ProtocolMsg, timeout?: number): AbortablePromise<ProtocolMsg>;
   send(msg: ProtocolMsg): void;
 }
@@ -123,7 +123,7 @@ export class Connection extends Listenable implements IConnection {
   private _sentAt: number;
   private _lastRef: number;
   private _attachments: Map<number, Attachment>;
-  private _condition: Condition;
+  private _condition: Condition<Connection>;
   private _websocket: WebSocket | null;
 
   //===========================================
@@ -144,7 +144,7 @@ export class Connection extends Listenable implements IConnection {
     this._sentAt = 0;
     this._lastRef = 0;
     this._attachments = new Map();
-    this._condition = new Condition(() => {
+    this._condition = new Condition<Connection>(this, () => {
       return this.isOpen();
     });
     this._websocket = null;
@@ -167,7 +167,7 @@ export class Connection extends Listenable implements IConnection {
     return this._websocket !== null && this._websocket.readyState === 1;
   }
 
-  waitOpen(timeout?: number): AbortablePromise<void> {
+  waitOpen(timeout?: number): AbortablePromise<Connection> {
     return this._condition.wait(timeout);
   }
 
@@ -439,7 +439,7 @@ export class MultiAltEndpointsConnection
   private _connectPromise: AbortablePromise<void> | null;
   private _reconnectTimer: Timer | null;
   private _connection: Connection | null;
-  private _condition: Condition;
+  private _condition: Condition<MultiAltEndpointsConnection>;
 
   //===========================================
   // APIs
@@ -459,7 +459,7 @@ export class MultiAltEndpointsConnection
     this._connectPromise = null;
     this._reconnectTimer = null;
     this._connect();
-    this._condition = new Condition(() => {
+    this._condition = new Condition<MultiAltEndpointsConnection>(this, () => {
       return this.isOpen();
     });
   }
@@ -480,7 +480,7 @@ export class MultiAltEndpointsConnection
     return this._connection !== null && this._connection.isOpen();
   }
 
-  waitOpen(timeout?: number): AbortablePromise<void> {
+  waitOpen(timeout?: number): AbortablePromise<MultiAltEndpointsConnection> {
     return this._condition.wait(timeout);
   }
 
