@@ -251,12 +251,10 @@ export class Connection extends Listenable implements IConnection {
     if (!process.env.RUN_IN_JEST) {
       console.log(`Connection disconnected: endpoint: ${this._endpoint}`);
     }
-    this._stopSendHeartbeat();
+    this._stopRepeatSendHeartbeat();
     this._eventHandler.onDisconnected(this);
     this.notify(Event.ON_DISCONNECTED, this);
-    if (this._shouldRun) {
-      this._reconnect();
-    }
+    this._reconnect();
   }
 
   // eslint-disable-next-line
@@ -354,6 +352,10 @@ export class Connection extends Listenable implements IConnection {
   }
 
   private _reconnect() {
+    if (!this._shouldRun) {
+      return;
+    }
+    this._stopReconnect();
     this._reconnectTimer = setTimeout(
       this._connect.bind(this),
       this._options.reconnectDelay
@@ -368,13 +370,17 @@ export class Connection extends Listenable implements IConnection {
   }
 
   private _repeatSendHeartbeat() {
+    if (!this._shouldRun) {
+      return;
+    }
+    this._stopRepeatSendHeartbeat();
     this._heartbeatTimer = setInterval(
       this._sendHeartbeat.bind(this),
       this._options.heartbeatInterval
     );
   }
 
-  private _stopSendHeartbeat() {
+  private _stopRepeatSendHeartbeat() {
     if (this._heartbeatTimer !== null) {
       clearInterval(this._heartbeatTimer as number);
       this._heartbeatTimer = null;
@@ -402,10 +408,6 @@ export class Connection extends Listenable implements IConnection {
     return ++this._lastRef;
   }
 
-  private _now() {
-    return new Date().getTime();
-  }
-
   private _buildUrl() {
     if (this._options.sslEnabled) {
       return `wss://${this._endpoint}/$ws`;
@@ -424,6 +426,10 @@ export class Connection extends Listenable implements IConnection {
     }
     this._attachments.delete(ref);
   }
+
+  private _now() {
+    return new Date().getTime();
+  }
 }
 
 type PickEndpoint = () => AbortablePromise<string>;
@@ -436,10 +442,10 @@ export class MultiAltEndpointsConnection
   private _options: Options;
   private _eventHandler: IEventHandler;
   private _shouldRun: boolean;
-  private _connectPromise: AbortablePromise<void> | null;
+  private _connectTask: AbortablePromise<void> | null;
   private _reconnectTimer: Timer | null;
-  private _connection: Connection | null;
   private _condition: Condition<MultiAltEndpointsConnection>;
+  private _connection: Connection | null;
 
   //===========================================
   // APIs
@@ -455,19 +461,19 @@ export class MultiAltEndpointsConnection
     this._options = options;
     this._eventHandler = eventHandler;
     this._shouldRun = true;
-    this._connection = null;
-    this._connectPromise = null;
+    this._connectTask = null;
     this._reconnectTimer = null;
-    this._connect();
     this._condition = new Condition<MultiAltEndpointsConnection>(this, () => {
       return this.isOpen();
     });
+    this._connection = null;
+    this._connect();
   }
 
   close(): void {
     this._shouldRun = false;
     this._stopReconnect();
-    this._connectPromise?.abort();
+    this._connectTask?.abort();
     this._condition.clear();
     this._connection?.close();
   }
@@ -531,7 +537,7 @@ export class MultiAltEndpointsConnection
   //===========================================
 
   private _connect() {
-    this._connectPromise = this._pickEndpoint()
+    this._connectTask = this._pickEndpoint()
       .then((endpiont) => {
         const oldConnection = this._connection;
         this._connection = new Connection(endpiont, this._options, this);
@@ -547,6 +553,7 @@ export class MultiAltEndpointsConnection
     if (!this._shouldRun) {
       return;
     }
+    this._stopReconnect();
     this._reconnectTimer = setTimeout(
       this._connect.bind(this),
       this._options.reconnectDelay

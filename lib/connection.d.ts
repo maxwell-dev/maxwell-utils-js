@@ -67,14 +67,14 @@ export declare class Connection extends Listenable implements IConnection {
     private _reconnect;
     private _stopReconnect;
     private _repeatSendHeartbeat;
-    private _stopSendHeartbeat;
+    private _stopRepeatSendHeartbeat;
     private _sendHeartbeat;
     private _hasSentHeartbeat;
     private _createPingReq;
     private _newRef;
-    private _now;
     private _buildUrl;
     private _deleteAttachment;
+    private _now;
 }
 type PickEndpoint = () => AbortablePromise<string>;
 export declare class MultiAltEndpointsConnection extends Listenable implements IConnection, IEventHandler {
@@ -82,10 +82,10 @@ export declare class MultiAltEndpointsConnection extends Listenable implements I
     private _options;
     private _eventHandler;
     private _shouldRun;
-    private _connectPromise;
+    private _connectTask;
     private _reconnectTimer;
-    private _connection;
     private _condition;
+    private _connection;
     constructor(pickEndpoint: PickEndpoint, options: Options, eventHandler?: IEventHandler);
     close(): void;
     endpoint(): string | undefined;
