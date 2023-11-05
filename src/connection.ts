@@ -14,15 +14,10 @@ const WebSocketImpl =
 
 export interface IOptions {
   reconnectDelay?: number;
-
   heartbeatInterval?: number;
-
   defaultRoundTimeout?: number;
-
   retryRouteCount?: number;
-
   sslEnabled?: boolean;
-
   debugRoundEnabled?: boolean;
 }
 
