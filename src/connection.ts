@@ -512,44 +512,27 @@ export class MultiAltEndpointsConnection
   //===========================================
 
   onConnecting(connection: Connection): void {
-    console.debug(
-      `onConnecting event triggered by id: ${connection.id()}, endpoint: ${connection.endpoint()}`
-    );
     this._eventHandler.onConnecting(this, connection);
     this.notify(Event.ON_CONNECTING, this, connection);
   }
 
   onConnected(connection: Connection): void {
-    console.debug(
-      `onConnected event triggered by id: ${connection.id()}, endpoint: ${connection.endpoint()}`
-    );
     this._condition.notify();
     this._eventHandler.onConnected(this, connection);
     this.notify(Event.ON_CONNECTED, this, connection);
   }
 
   onDisconnecting(connection: Connection): void {
-    console.debug(
-      `onDisconnecting event triggered by id: ${connection.id()}, endpoint: ${connection.endpoint()}`
-    );
     this._eventHandler.onDisconnecting(this, connection);
     this.notify(Event.ON_DISCONNECTING, this, connection);
   }
 
   onDisconnected(connection: Connection): void {
-    if (!process.env.RUN_IN_JEST) {
-      console.debug(
-        `onDisconnected event triggered by id: ${connection.id()}, endpoint: ${connection.endpoint()}`
-      );
-    }
     this._eventHandler.onDisconnected(this, connection);
     this.notify(Event.ON_DISCONNECTED, this, connection);
   }
 
   onCorrupted(connection: Connection): void {
-    console.debug(
-      `onCorrupted event triggered by id: ${connection.id()}, endpoint: ${connection.endpoint()}`
-    );
     this._reconnect();
     this._eventHandler.onCorrupted(this, connection);
     this.notify(Event.ON_CORRUPTED, this, connection);
