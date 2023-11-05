@@ -108,7 +108,10 @@ export interface IConnection extends IListenable {
   send(msg: ProtocolMsg): void;
 }
 
+let ID_SEED = 0;
+
 export class Connection extends Listenable implements IConnection {
+  private _id: number = ID_SEED++;
   private _endpoint: string;
   private _options: Options;
   private _eventHandler: IEventHandler;
@@ -152,6 +155,10 @@ export class Connection extends Listenable implements IConnection {
     this._stopReconnect();
     this._disconnect();
     this._attachments.clear();
+  }
+
+  id(): number {
+    return this._id;
   }
 
   endpoint(): string {
@@ -235,7 +242,9 @@ export class Connection extends Listenable implements IConnection {
   // websocket callbacks
   //===========================================
   private _onOpen() {
-    console.log(`Connection connected: endpoint: ${this._endpoint}`);
+    console.log(
+      `Connection connected: id: ${this._id}, endpoint: ${this._endpoint}`
+    );
     this._repeatSendHeartbeat();
     this._condition.notify();
     this._eventHandler.onConnected(this);
@@ -244,7 +253,9 @@ export class Connection extends Listenable implements IConnection {
 
   private _onClose() {
     if (!process.env.RUN_IN_JEST) {
-      console.log(`Connection disconnected: endpoint: ${this._endpoint}`);
+      console.log(
+        `Connection disconnected: id: ${this._id}, endpoint: ${this._endpoint}`
+      );
     }
     this._stopRepeatSendHeartbeat();
     this._eventHandler.onDisconnected(this);
@@ -313,7 +324,7 @@ export class Connection extends Listenable implements IConnection {
 
   private _onError(e: any) {
     console.error(
-      `Connection corrupted: endpoint: ${this._endpoint}, error: ${e.message}`
+      `Connection corrupted: id: ${this._id}, endpoint: ${this._endpoint}, error: ${e.message}`
     );
     this._eventHandler.onCorrupted(this);
     this.notify(Event.ON_CORRUPTED, this);
@@ -324,7 +335,7 @@ export class Connection extends Listenable implements IConnection {
   //===========================================
 
   private _connect() {
-    console.log(`Connecting: endpoint: ${this._endpoint}`);
+    console.log(`Connecting: id: ${this._id}, endpoint: ${this._endpoint}`);
     this._eventHandler.onConnecting(this);
     this.notify(Event.ON_CONNECTING, this);
     const websocket = new WebSocketImpl(this._buildUrl());
@@ -337,7 +348,7 @@ export class Connection extends Listenable implements IConnection {
   }
 
   private _disconnect() {
-    console.log(`Disconnecting: endpoint: ${this._endpoint}`);
+    console.log(`Disconnecting: id: ${this._id}, endpoint: ${this._endpoint}`);
     this._eventHandler.onDisconnecting(this);
     this.notify(Event.ON_DISCONNECTING, this);
     if (this._websocket !== null) {
@@ -500,28 +511,45 @@ export class MultiAltEndpointsConnection
   // IEventHandler implementation
   //===========================================
 
-  onConnecting(connection: IConnection): void {
+  onConnecting(connection: Connection): void {
+    console.debug(
+      `onConnecting event triggered by id: ${connection.id()}, endpoint: ${connection.endpoint()}`
+    );
     this._eventHandler.onConnecting(this, connection);
     this.notify(Event.ON_CONNECTING, this, connection);
   }
 
-  onConnected(connection: IConnection): void {
+  onConnected(connection: Connection): void {
+    console.debug(
+      `onConnected event triggered by id: ${connection.id()}, endpoint: ${connection.endpoint()}`
+    );
     this._condition.notify();
     this._eventHandler.onConnected(this, connection);
     this.notify(Event.ON_CONNECTED, this, connection);
   }
 
-  onDisconnecting(connection: IConnection): void {
+  onDisconnecting(connection: Connection): void {
+    console.debug(
+      `onDisconnecting event triggered by id: ${connection.id()}, endpoint: ${connection.endpoint()}`
+    );
     this._eventHandler.onDisconnecting(this, connection);
     this.notify(Event.ON_DISCONNECTING, this, connection);
   }
 
-  onDisconnected(connection: IConnection): void {
+  onDisconnected(connection: Connection): void {
+    if (!process.env.RUN_IN_JEST) {
+      console.debug(
+        `onDisconnected event triggered by id: ${connection.id()}, endpoint: ${connection.endpoint()}`
+      );
+    }
     this._eventHandler.onDisconnected(this, connection);
     this.notify(Event.ON_DISCONNECTED, this, connection);
   }
 
-  onCorrupted(connection: IConnection): void {
+  onCorrupted(connection: Connection): void {
+    console.debug(
+      `onCorrupted event triggered by id: ${connection.id()}, endpoint: ${connection.endpoint()}`
+    );
     this._reconnect();
     this._eventHandler.onCorrupted(this, connection);
     this.notify(Event.ON_CORRUPTED, this, connection);
@@ -534,9 +562,7 @@ export class MultiAltEndpointsConnection
   private _connect() {
     this._connectTask = this._pickEndpoint()
       .then((endpiont) => {
-        const oldConnection = this._connection;
         this._connection = new Connection(endpiont, this._options, this);
-        oldConnection?.close();
       })
       .catch((reason) => {
         console.error(`Failed to pick endpoint: ${reason.stack}`);
@@ -548,6 +574,8 @@ export class MultiAltEndpointsConnection
     if (!this._shouldRun) {
       return;
     }
+    const oldConnection = this._connection;
+    oldConnection?.close();
     this._stopReconnect();
     this._reconnectTimer = setTimeout(
       this._connect.bind(this),

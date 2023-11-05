@@ -40,6 +40,7 @@ export interface IConnection extends IListenable {
     send(msg: ProtocolMsg): void;
 }
 export declare class Connection extends Listenable implements IConnection {
+    private _id;
     private _endpoint;
     private _options;
     private _eventHandler;
@@ -53,6 +54,7 @@ export declare class Connection extends Listenable implements IConnection {
     private _websocket;
     constructor(endpoint: string, options: Options, eventHandler?: IEventHandler);
     close(): void;
+    id(): number;
     endpoint(): string;
     isOpen(): boolean;
     waitOpen(timeout?: number): AbortablePromise<Connection>;
@@ -93,11 +95,11 @@ export declare class MultiAltEndpointsConnection extends Listenable implements I
     waitOpen(timeout?: number): AbortablePromise<MultiAltEndpointsConnection>;
     request(msg: any, timeout?: number | undefined): AbortablePromise<ProtocolMsg>;
     send(msg: any): void;
-    onConnecting(connection: IConnection): void;
-    onConnected(connection: IConnection): void;
-    onDisconnecting(connection: IConnection): void;
-    onDisconnected(connection: IConnection): void;
-    onCorrupted(connection: IConnection): void;
+    onConnecting(connection: Connection): void;
+    onConnected(connection: Connection): void;
+    onDisconnecting(connection: Connection): void;
+    onDisconnected(connection: Connection): void;
+    onCorrupted(connection: Connection): void;
     private _connect;
     private _reconnect;
     private _stopReconnect;
