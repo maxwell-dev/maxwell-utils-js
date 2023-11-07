@@ -545,6 +545,9 @@ export class MultiAltEndpointsConnection
   private _connect() {
     this._connectTask = this._pickEndpoint()
       .then((endpiont) => {
+        if (!this._shouldRun) {
+          return;
+        }
         this._connection = new Connection(endpiont, this._options, this);
       })
       .catch((reason) => {
@@ -557,8 +560,7 @@ export class MultiAltEndpointsConnection
     if (!this._shouldRun) {
       return;
     }
-    const oldConnection = this._connection;
-    oldConnection?.close();
+    this._connection?.close();
     this._stopReconnect();
     this._reconnectTimer = setTimeout(
       this._connect.bind(this),
