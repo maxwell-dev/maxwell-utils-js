@@ -15,19 +15,19 @@ const WebSocketImpl =
 export interface IOptions {
   reconnectDelay?: number;
   heartbeatInterval?: number;
-  defaultRoundTimeout?: number;
+  roundTimeout?: number;
   retryRouteCount?: number;
   sslEnabled?: boolean;
-  debugRoundEnabled?: boolean;
+  roundDebugEnabled?: boolean;
 }
 
 export class Options implements IOptions {
   readonly reconnectDelay: number;
   readonly heartbeatInterval: number;
-  readonly defaultRoundTimeout: number;
+  readonly roundTimeout: number;
   readonly retryRouteCount: number;
   readonly sslEnabled: boolean;
-  readonly debugRoundEnabled: boolean;
+  readonly roundDebugEnabled: boolean;
 
   constructor(options?: IOptions) {
     if (typeof options === "undefined") {
@@ -43,10 +43,10 @@ export class Options implements IOptions {
     } else {
       this.heartbeatInterval = options.heartbeatInterval;
     }
-    if (typeof options.defaultRoundTimeout === "undefined") {
-      this.defaultRoundTimeout = 15000;
+    if (typeof options.roundTimeout === "undefined") {
+      this.roundTimeout = 15000;
     } else {
-      this.defaultRoundTimeout = options.defaultRoundTimeout;
+      this.roundTimeout = options.roundTimeout;
     }
     if (typeof options.retryRouteCount === "undefined") {
       this.retryRouteCount = 0;
@@ -58,10 +58,10 @@ export class Options implements IOptions {
     } else {
       this.sslEnabled = options.sslEnabled;
     }
-    if (typeof options.debugRoundEnabled === "undefined") {
-      this.debugRoundEnabled = false;
+    if (typeof options.roundDebugEnabled === "undefined") {
+      this.roundDebugEnabled = false;
     } else {
-      this.debugRoundEnabled = options.debugRoundEnabled;
+      this.roundDebugEnabled = options.roundDebugEnabled;
     }
   }
 }
@@ -175,7 +175,7 @@ export class Connection extends Listenable implements IConnection {
 
   request(msg: ProtocolMsg, timeout?: number): AbortablePromise<ProtocolMsg> {
     if (typeof timeout === "undefined") {
-      timeout = this._options.defaultRoundTimeout;
+      timeout = this._options.roundTimeout;
     }
 
     const ref = this._newRef();
@@ -209,7 +209,7 @@ export class Connection extends Listenable implements IConnection {
   }
 
   send(msg: ProtocolMsg): void {
-    if (this._options.debugRoundEnabled) {
+    if (this._options.roundDebugEnabled) {
       const limitedMsg = JSON.stringify(msg).substring(0, 100);
       console.debug(`Sending msg: [${msg.constructor.name}]${limitedMsg}`);
     }
@@ -279,7 +279,7 @@ export class Connection extends Listenable implements IConnection {
     if (msgType === msg_types.ping_rep_t) {
       // do nothing
     } else {
-      if (this._options.debugRoundEnabled) {
+      if (this._options.roundDebugEnabled) {
         console.debug(
           `Received msg: [${msgType.name}]` +
             `${JSON.stringify(msg).substring(0, 100)}`

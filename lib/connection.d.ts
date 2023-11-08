@@ -3,18 +3,18 @@ import { ProtocolMsg, Listenable, IListenable } from "./internal";
 export interface IOptions {
     reconnectDelay?: number;
     heartbeatInterval?: number;
-    defaultRoundTimeout?: number;
+    roundTimeout?: number;
     retryRouteCount?: number;
     sslEnabled?: boolean;
-    debugRoundEnabled?: boolean;
+    roundDebugEnabled?: boolean;
 }
 export declare class Options implements IOptions {
     readonly reconnectDelay: number;
     readonly heartbeatInterval: number;
-    readonly defaultRoundTimeout: number;
+    readonly roundTimeout: number;
     readonly retryRouteCount: number;
     readonly sslEnabled: boolean;
-    readonly debugRoundEnabled: boolean;
+    readonly roundDebugEnabled: boolean;
     constructor(options?: IOptions);
 }
 export declare enum Event {
