@@ -130,6 +130,7 @@ describe("MultiAltEndpointsConnection", () => {
         payload: JSON.stringify({}),
         header: {},
       });
+      await conn.waitOpen();
       const request = conn.request(req, 1000);
       expect(request).toBeInstanceOf(AbortablePromise);
       const result = await request;

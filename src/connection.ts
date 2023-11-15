@@ -247,18 +247,22 @@ export class Connection extends Listenable implements IConnection {
     );
     this._repeatSendHeartbeat();
     this._condition.notify();
-    this._eventHandler.onConnected(this);
+    tryWith(() => this._eventHandler.onConnected(this));
     this.notify(Event.ON_CONNECTED, this);
   }
 
   private _onClose() {
-    if (!process.env.RUN_IN_JEST) {
+    if (
+      typeof process === "undefined" ||
+      typeof process.env === "undefined" ||
+      !process.env.RUN_IN_JEST
+    ) {
       console.log(
         `Connection disconnected: id: ${this._id}, endpoint: ${this._endpoint}`
       );
     }
     this._stopRepeatSendHeartbeat();
-    this._eventHandler.onDisconnected(this);
+    tryWith(() => this._eventHandler.onDisconnected(this));
     this.notify(Event.ON_DISCONNECTED, this);
     this._reconnect();
   }
@@ -326,7 +330,7 @@ export class Connection extends Listenable implements IConnection {
     console.error(
       `Connection corrupted: id: ${this._id}, endpoint: ${this._endpoint}, error: ${e.message}`
     );
-    this._eventHandler.onCorrupted(this);
+    tryWith(() => this._eventHandler.onCorrupted(this));
     this.notify(Event.ON_CORRUPTED, this);
   }
 
@@ -336,7 +340,7 @@ export class Connection extends Listenable implements IConnection {
 
   private _connect() {
     console.log(`Connecting: id: ${this._id}, endpoint: ${this._endpoint}`);
-    this._eventHandler.onConnecting(this);
+    tryWith(() => this._eventHandler.onConnecting(this));
     this.notify(Event.ON_CONNECTING, this);
     const websocket = new WebSocketImpl(this._buildUrl());
     websocket.binaryType = "arraybuffer";
@@ -349,7 +353,7 @@ export class Connection extends Listenable implements IConnection {
 
   private _disconnect() {
     console.log(`Disconnecting: id: ${this._id}, endpoint: ${this._endpoint}`);
-    this._eventHandler.onDisconnecting(this);
+    tryWith(() => this._eventHandler.onDisconnecting(this));
     this.notify(Event.ON_DISCONNECTING, this);
     if (this._websocket !== null) {
       this._websocket.close();
@@ -512,29 +516,29 @@ export class MultiAltEndpointsConnection
   //===========================================
 
   onConnecting(connection: Connection): void {
-    this._eventHandler.onConnecting(this, connection);
+    tryWith(() => this._eventHandler.onConnecting(this, connection));
     this.notify(Event.ON_CONNECTING, this, connection);
   }
 
   onConnected(connection: Connection): void {
     this._condition.notify();
-    this._eventHandler.onConnected(this, connection);
+    tryWith(() => this._eventHandler.onConnected(this, connection));
     this.notify(Event.ON_CONNECTED, this, connection);
   }
 
   onDisconnecting(connection: Connection): void {
-    this._eventHandler.onDisconnecting(this, connection);
+    tryWith(() => this._eventHandler.onDisconnecting(this, connection));
     this.notify(Event.ON_DISCONNECTING, this, connection);
   }
 
   onDisconnected(connection: Connection): void {
-    this._eventHandler.onDisconnected(this, connection);
+    tryWith(() => this._eventHandler.onDisconnected(this, connection));
     this.notify(Event.ON_DISCONNECTED, this, connection);
+    this._reconnect();
   }
 
   onCorrupted(connection: Connection): void {
-    this._reconnect();
-    this._eventHandler.onCorrupted(this, connection);
+    tryWith(() => this._eventHandler.onCorrupted(this, connection));
     this.notify(Event.ON_CORRUPTED, this, connection);
   }
 
@@ -573,6 +577,14 @@ export class MultiAltEndpointsConnection
       clearTimeout(this._reconnectTimer as number);
       this._reconnectTimer = null;
     }
+  }
+}
+
+function tryWith(callback: () => void) {
+  try {
+    callback();
+  } catch (e: any) {
+    console.error(`Failed to execute: reason: ${e.stack}`);
   }
 }
 
