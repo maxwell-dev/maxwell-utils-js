@@ -120,6 +120,7 @@ export class Connection extends Listenable implements IConnection {
   private _reconnectTimer: Timer | null;
   private _sentAt: number;
   private _lastRef: number;
+  private _timeoutCount: number;
   private _attachments: Map<number, Attachment>;
   private _condition: Condition<Connection>;
   private _websocket: WebSocket | null;
@@ -141,6 +142,7 @@ export class Connection extends Listenable implements IConnection {
     this._reconnectTimer = null;
     this._sentAt = 0;
     this._lastRef = 0;
+    this._timeoutCount = 0;
     this._attachments = new Map();
     this._condition = new Condition<Connection>(this, () => {
       return this.isOpen();
@@ -185,15 +187,22 @@ export class Connection extends Listenable implements IConnection {
     const promise = new AbortablePromise((resolve, reject) => {
       this._attachments.set(ref, [resolve, reject, msg, 0, null]);
       timer = setTimeout(() => {
+        this._timeoutCount++;
         reject(new TimeoutError(JSON.stringify(msg).substring(0, 100)));
       }, timeout);
     })
       .then((value) => {
+        this._timeoutCount = 0;
         this._deleteAttachment(ref);
         clearTimeout(timer as number);
         return value;
       })
       .catch((reason) => {
+        if (reason instanceof TimeoutError && this._timeoutCount > 2) {
+          this._timeoutCount = 0;
+          this._disconnect();
+          this._reconnect();
+        }
         this._deleteAttachment(ref);
         clearTimeout(timer as number);
         throw reason;
@@ -343,33 +352,42 @@ export class Connection extends Listenable implements IConnection {
   // internal functions
   //===========================================
 
-  private _connect() {
-    console.log(`Connecting: id: ${this._id}, endpoint: ${this._endpoint}`);
-    tryWith(() => this._eventHandler.onConnecting(this));
-    this.notify(Event.ON_CONNECTING, this);
+  private _openWebsocket() {
     const websocket = new WebSocketImpl(this._buildUrl());
     websocket.binaryType = "arraybuffer";
     websocket.onopen = this._onOpen.bind(this);
     websocket.onclose = this._onClose.bind(this);
     websocket.onmessage = this._onMsg.bind(this);
     websocket.onerror = this._onError.bind(this);
-    this._websocket = websocket;
+    return websocket;
   }
 
-  private _disconnect() {
-    console.log(`Disconnecting: id: ${this._id}, endpoint: ${this._endpoint}`);
-    tryWith(() => this._eventHandler.onDisconnecting(this));
-    this.notify(Event.ON_DISCONNECTING, this);
+  private _closeWebsocket() {
     if (this._websocket !== null) {
       this._websocket.close();
       this._websocket = null;
     }
   }
 
+  private _connect() {
+    console.log(`Connecting: id: ${this._id}, endpoint: ${this._endpoint}`);
+    tryWith(() => this._eventHandler.onConnecting(this));
+    this.notify(Event.ON_CONNECTING, this);
+    this._websocket = this._openWebsocket();
+  }
+
+  private _disconnect() {
+    console.log(`Disconnecting: id: ${this._id}, endpoint: ${this._endpoint}`);
+    tryWith(() => this._eventHandler.onDisconnecting(this));
+    this.notify(Event.ON_DISCONNECTING, this);
+    this._closeWebsocket();
+  }
+
   private _reconnect() {
     if (!this._shouldRun) {
       return;
     }
+    this._closeWebsocket();
     this._stopReconnect();
     this._reconnectTimer = setTimeout(
       this._connect.bind(this),

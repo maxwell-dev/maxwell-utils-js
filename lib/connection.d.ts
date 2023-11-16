@@ -49,6 +49,7 @@ export declare class Connection extends Listenable implements IConnection {
     private _reconnectTimer;
     private _sentAt;
     private _lastRef;
+    private _timeoutCount;
     private _attachments;
     private _condition;
     private _websocket;
@@ -64,6 +65,8 @@ export declare class Connection extends Listenable implements IConnection {
     private _onClose;
     private _onMsg;
     private _onError;
+    private _openWebsocket;
+    private _closeWebsocket;
     private _connect;
     private _disconnect;
     private _reconnect;
