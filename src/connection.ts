@@ -117,6 +117,7 @@ export class Connection extends Listenable implements IConnection {
   private _options: Options;
   private _eventHandler: IEventHandler;
   private _shouldRun: boolean;
+  private _isReopening: boolean;
   private _heartbeatTimer: Timer | null;
   private _reconnectTimer: Timer | null;
   private _sentAt: number;
@@ -138,6 +139,7 @@ export class Connection extends Listenable implements IConnection {
     this._options = options;
     this._eventHandler = eventHandler;
     this._shouldRun = true;
+    this._isReopening = false;
     this._heartbeatTimer = null;
     this._reconnectTimer = null;
     this._sentAt = 0;
@@ -151,6 +153,9 @@ export class Connection extends Listenable implements IConnection {
   }
 
   close(): void {
+    if (!this._shouldRun) {
+      return;
+    }
     this._shouldRun = false;
     this._condition.clear();
     this._stopReconnect();
@@ -175,7 +180,9 @@ export class Connection extends Listenable implements IConnection {
   }
 
   reopen(): void {
-    this._reconnect(0);
+    if (this._shouldRun && !this._isReopening) {
+      this._disconnect();
+    }
   }
 
   request(msg: ProtocolMsg, timeout?: number): AbortablePromise<ProtocolMsg> {
@@ -257,15 +264,9 @@ export class Connection extends Listenable implements IConnection {
   }
 
   private _onClose() {
-    if (
-      typeof process === "undefined" ||
-      typeof process.env === "undefined" ||
-      !process.env.RUN_IN_JEST
-    ) {
-      console.log(
-        `Connection disconnected: id: ${this._id}, endpoint: ${this._endpoint}`
-      );
-    }
+    console.log(
+      `Connection disconnected: id: ${this._id}, endpoint: ${this._endpoint}`
+    );
     this._stopRepeatSendHeartbeat();
     tryWith(() => this._eventHandler.onDisconnected(this));
     this.notify(Event.ON_DISCONNECTED, this);
@@ -370,9 +371,11 @@ export class Connection extends Listenable implements IConnection {
     tryWith(() => this._eventHandler.onConnecting(this));
     this.notify(Event.ON_CONNECTING, this);
     this._websocket = this._openWebsocket();
+    this._isReopening = false;
   }
 
   private _disconnect() {
+    this._isReopening = true;
     console.log(`Disconnecting: id: ${this._id}, endpoint: ${this._endpoint}`);
     tryWith(() => this._eventHandler.onDisconnecting(this));
     this.notify(Event.ON_DISCONNECTING, this);
@@ -383,7 +386,7 @@ export class Connection extends Listenable implements IConnection {
     if (!this._shouldRun) {
       return;
     }
-    this._disconnect();
+    this._closeWebsocket();
     this._stopReconnect();
     this._reconnectTimer = setTimeout(this._connect.bind(this), delay);
   }
@@ -468,6 +471,7 @@ export class MultiAltEndpointsConnection
   private _options: Options;
   private _eventHandler: IEventHandler;
   private _shouldRun: boolean;
+  private _isReopening: boolean;
   private _connectTask: AbortablePromise<void> | null;
   private _reconnectTimer: Timer | null;
   private _condition: Condition<MultiAltEndpointsConnection>;
@@ -487,6 +491,7 @@ export class MultiAltEndpointsConnection
     this._options = options;
     this._eventHandler = eventHandler;
     this._shouldRun = true;
+    this._isReopening = false;
     this._connectTask = null;
     this._reconnectTimer = null;
     this._condition = new Condition<MultiAltEndpointsConnection>(this, () => {
@@ -497,6 +502,9 @@ export class MultiAltEndpointsConnection
   }
 
   close(): void {
+    if (!this._shouldRun) {
+      return;
+    }
     this._shouldRun = false;
     this._stopReconnect();
     this._connectTask?.abort();
@@ -517,7 +525,9 @@ export class MultiAltEndpointsConnection
   }
 
   reopen(): void {
-    this._reconnect(0);
+    if (this._shouldRun && !this._isReopening) {
+      this._connection?.close();
+    }
   }
 
   request(
@@ -538,6 +548,7 @@ export class MultiAltEndpointsConnection
   onConnecting(connection: Connection): void {
     tryWith(() => this._eventHandler.onConnecting(this, connection));
     this.notify(Event.ON_CONNECTING, this, connection);
+    this._isReopening = false;
   }
 
   onConnected(connection: Connection): void {
@@ -547,6 +558,7 @@ export class MultiAltEndpointsConnection
   }
 
   onDisconnecting(connection: Connection): void {
+    this._isReopening = true;
     tryWith(() => this._eventHandler.onDisconnecting(this, connection));
     this.notify(Event.ON_DISCONNECTING, this, connection);
   }

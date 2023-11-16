@@ -115,6 +115,30 @@ describe("Connection", () => {
       conn.close();
     }
   });
+
+  it("reopen", async () => {
+    const conn = new Connection("localhost:10000", new Options());
+    expect(conn).toBeInstanceOf(Connection);
+    try {
+      let count = 0;
+      const ready = new Promise((resolve) => {
+        conn.addListener(Event.ON_CONNECTED, (conn) => {
+          count++;
+          conn.reopen();
+          conn.reopen();
+          conn.reopen();
+          if (count == 2) {
+            resolve(conn);
+          }
+        });
+      });
+      const result = await ready;
+      expect(result).toBeInstanceOf(Connection);
+      expect(count).toBe(2);
+    } finally {
+      conn.close();
+    }
+  });
 });
 
 describe("MultiAltEndpointsConnection", () => {
@@ -193,6 +217,33 @@ describe("MultiAltEndpointsConnection", () => {
       });
       const result = await ready;
       expect(result).toBeInstanceOf(MultiAltEndpointsConnection);
+    } finally {
+      conn.close();
+    }
+  });
+
+  it("reopen", async () => {
+    const conn = new MultiAltEndpointsConnection(
+      () => AbortablePromise.resolve("localhost:10000"),
+      new Options()
+    );
+    expect(conn).toBeInstanceOf(MultiAltEndpointsConnection);
+    try {
+      let count = 0;
+      const ready = new Promise((resolve) => {
+        conn.addListener(Event.ON_CONNECTED, (conn) => {
+          count++;
+          conn.reopen();
+          conn.reopen();
+          conn.reopen();
+          if (count == 2) {
+            resolve(conn);
+          }
+        });
+      });
+      const result = await ready;
+      expect(result).toBeInstanceOf(MultiAltEndpointsConnection);
+      expect(count).toBe(2);
     } finally {
       conn.close();
     }
