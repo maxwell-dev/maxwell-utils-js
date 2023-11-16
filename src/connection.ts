@@ -294,7 +294,7 @@ export class Connection extends Listenable implements IConnection {
 
       const attachment = this._attachments.get(ref);
       if (typeof attachment === "undefined") {
-        console.warn(
+        console.debug(
           `The related request was lost: ref: ${ref}, reply: ${JSON.stringify(
             msg
           ).substring(0, 100)}`
