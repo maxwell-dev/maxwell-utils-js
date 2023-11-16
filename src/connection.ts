@@ -104,6 +104,7 @@ export interface IConnection extends IListenable {
   endpoint(): string | undefined;
   isOpen(): boolean;
   waitOpen(timeout?: number): AbortablePromise<IConnection>;
+  reopen(): void;
   request(msg: ProtocolMsg, timeout?: number): AbortablePromise<ProtocolMsg>;
   send(msg: ProtocolMsg): void;
 }
@@ -120,7 +121,6 @@ export class Connection extends Listenable implements IConnection {
   private _reconnectTimer: Timer | null;
   private _sentAt: number;
   private _lastRef: number;
-  private _timeoutCount: number;
   private _attachments: Map<number, Attachment>;
   private _condition: Condition<Connection>;
   private _websocket: WebSocket | null;
@@ -142,7 +142,6 @@ export class Connection extends Listenable implements IConnection {
     this._reconnectTimer = null;
     this._sentAt = 0;
     this._lastRef = 0;
-    this._timeoutCount = 0;
     this._attachments = new Map();
     this._condition = new Condition<Connection>(this, () => {
       return this.isOpen();
@@ -175,6 +174,10 @@ export class Connection extends Listenable implements IConnection {
     return this._condition.wait(timeout);
   }
 
+  reopen(): void {
+    this._reconnect(0);
+  }
+
   request(msg: ProtocolMsg, timeout?: number): AbortablePromise<ProtocolMsg> {
     if (typeof timeout === "undefined") {
       timeout = this._options.roundTimeout;
@@ -187,22 +190,15 @@ export class Connection extends Listenable implements IConnection {
     const promise = new AbortablePromise((resolve, reject) => {
       this._attachments.set(ref, [resolve, reject, msg, 0, null]);
       timer = setTimeout(() => {
-        this._timeoutCount++;
         reject(new TimeoutError(JSON.stringify(msg).substring(0, 100)));
       }, timeout);
     })
       .then((value) => {
-        this._timeoutCount = 0;
         this._deleteAttachment(ref);
         clearTimeout(timer as number);
         return value;
       })
       .catch((reason) => {
-        if (reason instanceof TimeoutError && this._timeoutCount > 2) {
-          this._timeoutCount = 0;
-          this._disconnect();
-          this._reconnect();
-        }
         this._deleteAttachment(ref);
         clearTimeout(timer as number);
         throw reason;
@@ -383,16 +379,13 @@ export class Connection extends Listenable implements IConnection {
     this._closeWebsocket();
   }
 
-  private _reconnect() {
+  private _reconnect(delay = this._options.reconnectDelay) {
     if (!this._shouldRun) {
       return;
     }
-    this._closeWebsocket();
+    this._disconnect();
     this._stopReconnect();
-    this._reconnectTimer = setTimeout(
-      this._connect.bind(this),
-      this._options.reconnectDelay
-    );
+    this._reconnectTimer = setTimeout(this._connect.bind(this), delay);
   }
 
   private _stopReconnect() {
@@ -523,6 +516,10 @@ export class MultiAltEndpointsConnection
     return this._condition.wait(timeout);
   }
 
+  reopen(): void {
+    this._reconnect(0);
+  }
+
   request(
     msg: any,
     timeout?: number | undefined
@@ -583,16 +580,13 @@ export class MultiAltEndpointsConnection
       });
   }
 
-  private _reconnect() {
+  private _reconnect(delay = this._options.reconnectDelay) {
     if (!this._shouldRun) {
       return;
     }
     this._connection?.close();
     this._stopReconnect();
-    this._reconnectTimer = setTimeout(
-      this._connect.bind(this),
-      this._options.reconnectDelay
-    );
+    this._reconnectTimer = setTimeout(this._connect.bind(this), delay);
   }
 
   private _stopReconnect() {
