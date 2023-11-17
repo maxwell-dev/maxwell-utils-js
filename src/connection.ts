@@ -230,8 +230,8 @@ export class Connection extends Listenable implements IConnection {
     try {
       encodedMsg = encode_msg(msg);
     } catch (e: any) {
-      const errorMsg = `Failed to encode msg: reason: ${e.message}`;
-      console.error(errorMsg);
+      const errorMsg = `Failed to encode msg: reason: ${e}`;
+      console.error(errorMsg + ", msg: ", msg);
       throw new Error(errorMsg);
     }
 
