@@ -46,9 +46,9 @@ export declare class Connection extends Listenable implements IConnection {
     private _options;
     private _eventHandler;
     private _shouldRun;
-    private _isReopening;
     private _heartbeatTimer;
     private _reconnectTimer;
+    private _reopenTimer;
     private _sentAt;
     private _lastRef;
     private _attachments;
@@ -89,9 +89,9 @@ export declare class MultiAltEndpointsConnection extends Listenable implements I
     private _options;
     private _eventHandler;
     private _shouldRun;
-    private _isReopening;
     private _connectTask;
     private _reconnectTimer;
+    private _reopenTimer;
     private _condition;
     private _connection;
     constructor(pickEndpoint: PickEndpoint, options: Options, eventHandler?: IEventHandler);
