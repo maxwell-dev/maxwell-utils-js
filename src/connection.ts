@@ -104,7 +104,6 @@ export interface IConnection extends IListenable {
   endpoint(): string | undefined;
   isOpen(): boolean;
   waitOpen(timeout?: number): AbortablePromise<IConnection>;
-  reopen(): void;
   request(msg: ProtocolMsg, timeout?: number): AbortablePromise<ProtocolMsg>;
   send(msg: ProtocolMsg): void;
 }
@@ -119,7 +118,6 @@ export class Connection extends Listenable implements IConnection {
   private _shouldRun: boolean;
   private _heartbeatTimer: Timer | null;
   private _reconnectTimer: Timer | null;
-  private _reopenTimer: Timer | null;
   private _sentAt: number;
   private _lastRef: number;
   private _attachments: Map<number, Attachment>;
@@ -141,7 +139,6 @@ export class Connection extends Listenable implements IConnection {
     this._shouldRun = true;
     this._heartbeatTimer = null;
     this._reconnectTimer = null;
-    this._reopenTimer = null;
     this._sentAt = 0;
     this._lastRef = 0;
     this._attachments = new Map();
@@ -179,21 +176,6 @@ export class Connection extends Listenable implements IConnection {
     return this._condition.wait(timeout);
   }
 
-  reopen(): void {
-    if (!this._shouldRun) {
-      return;
-    }
-    if (this._reopenTimer === null) {
-      console.log(
-        `Reopening connection: id: ${this._id}, endpoint: ${this._endpoint}`
-      );
-      this._reopenTimer = setTimeout(() => {
-        this._disconnect();
-        this._reopenTimer = null;
-      }, this._options.reconnectDelay);
-    }
-  }
-
   request(msg: ProtocolMsg, timeout?: number): AbortablePromise<ProtocolMsg> {
     if (typeof timeout === "undefined") {
       timeout = this._options.roundTimeout;
@@ -206,7 +188,6 @@ export class Connection extends Listenable implements IConnection {
     const promise = new AbortablePromise((resolve, reject) => {
       this._attachments.set(ref, [resolve, reject, msg, 0, null]);
       timer = setTimeout(() => {
-        console.log("Current websocket state: ", this._websocket?.readyState);
         reject(new TimeoutError(JSON.stringify(msg).substring(0, 100)));
       }, timeout);
     })
@@ -481,7 +462,6 @@ export class MultiAltEndpointsConnection
   private _shouldRun: boolean;
   private _connectTask: AbortablePromise<void> | null;
   private _reconnectTimer: Timer | null;
-  private _reopenTimer: Timer | null;
   private _condition: Condition<MultiAltEndpointsConnection>;
   private _connection: Connection | null;
 
@@ -501,7 +481,6 @@ export class MultiAltEndpointsConnection
     this._shouldRun = true;
     this._connectTask = null;
     this._reconnectTimer = null;
-    this._reopenTimer = null;
     this._condition = new Condition<MultiAltEndpointsConnection>(this, () => {
       return this.isOpen();
     });
@@ -530,19 +509,6 @@ export class MultiAltEndpointsConnection
 
   waitOpen(timeout?: number): AbortablePromise<MultiAltEndpointsConnection> {
     return this._condition.wait(timeout);
-  }
-
-  reopen(): void {
-    if (!this._shouldRun) {
-      return;
-    }
-    if (this._reopenTimer === null) {
-      console.log("Reopening connection: conn: ", this._connection);
-      this._reopenTimer = setTimeout(() => {
-        this._connection?.close();
-        this._reopenTimer = null;
-      }, this._options.reconnectDelay);
-    }
   }
 
   request(
