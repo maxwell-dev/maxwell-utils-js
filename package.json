@@ -1,6 +1,6 @@
 {
   "name": "maxwell-utils",
-  "version": "0.11.9",
+  "version": "0.11.10",
   "description": "Maxwell utils implementation for js/ts.",
   "author": "Chaoqian Xu <chaoranxu@gmail.com>",
   "license": "MIT",

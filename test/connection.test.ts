@@ -127,6 +127,7 @@ describe("Connection", () => {
           conn.reopen();
           conn.reopen();
           conn.reopen();
+          console.log("!!!!!!!!!!!!", count);
           if (count == 2) {
             resolve(conn);
           }
@@ -138,7 +139,7 @@ describe("Connection", () => {
     } finally {
       conn.close();
     }
-  });
+  }, 10000);
 });
 
 describe("MultiAltEndpointsConnection", () => {
@@ -247,5 +248,5 @@ describe("MultiAltEndpointsConnection", () => {
     } finally {
       conn.close();
     }
-  });
+  }, 10000);
 });

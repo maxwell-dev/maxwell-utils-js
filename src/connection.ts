@@ -180,16 +180,18 @@ export class Connection extends Listenable implements IConnection {
   }
 
   reopen(): void {
-    if (!this._shouldRun || !this.isOpen()) {
+    if (!this._shouldRun) {
       return;
     }
-    console.log(
-      `Reopening connection: id: ${this._id}, endpoint: ${this._endpoint}`
-    );
-    if (this._reopenTimer !== null) {
-      clearTimeout(this._reopenTimer as number);
+    if (this._reopenTimer === null) {
+      console.log(
+        `Reopening connection: id: ${this._id}, endpoint: ${this._endpoint}`
+      );
+      this._reopenTimer = setTimeout(() => {
+        this._disconnect();
+        this._reopenTimer = null;
+      }, this._options.reconnectDelay);
     }
-    this._reopenTimer = setTimeout(this._disconnect.bind(this), 0);
   }
 
   request(msg: ProtocolMsg, timeout?: number): AbortablePromise<ProtocolMsg> {
@@ -204,6 +206,7 @@ export class Connection extends Listenable implements IConnection {
     const promise = new AbortablePromise((resolve, reject) => {
       this._attachments.set(ref, [resolve, reject, msg, 0, null]);
       timer = setTimeout(() => {
+        console.log("Current websocket state: ", this._websocket?.readyState);
         reject(new TimeoutError(JSON.stringify(msg).substring(0, 100)));
       }, timeout);
     })
@@ -530,14 +533,16 @@ export class MultiAltEndpointsConnection
   }
 
   reopen(): void {
-    if (!this._shouldRun || !this.isOpen()) {
+    if (!this._shouldRun) {
       return;
     }
-    console.log("Reopening connection: conn: ", this._connection);
-    if (this._reopenTimer !== null) {
-      clearTimeout(this._reopenTimer as number);
+    if (this._reopenTimer === null) {
+      console.log("Reopening connection: conn: ", this._connection);
+      this._reopenTimer = setTimeout(() => {
+        this._connection?.close();
+        this._reopenTimer = null;
+      }, this._options.reconnectDelay);
     }
-    this._reopenTimer = setTimeout(() => this._connection?.close(), 0);
   }
 
   request(
