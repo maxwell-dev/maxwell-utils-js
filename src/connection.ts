@@ -181,6 +181,9 @@ export class Connection extends Listenable implements IConnection {
 
   reopen(): void {
     if (this._shouldRun && !this._isReopening) {
+      console.log(
+        `Reopening connection: id: ${this._id}, endpoint: ${this._endpoint}`
+      );
       this._disconnect();
     }
   }
@@ -244,7 +247,7 @@ export class Connection extends Listenable implements IConnection {
       this._websocket.send(encodedMsg);
       this._sentAt = this._now();
     } catch (e: any) {
-      const errorMsg = `Failed to send msg: reason: ${e.message}`;
+      const errorMsg = `Failed to send msg: reason: ${e}`;
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
@@ -526,6 +529,7 @@ export class MultiAltEndpointsConnection
 
   reopen(): void {
     if (this._shouldRun && !this._isReopening) {
+      console.log("Reopening connection: conn: ", this._connection);
       this._connection?.close();
     }
   }
