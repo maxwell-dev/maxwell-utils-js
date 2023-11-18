@@ -191,12 +191,12 @@ export class Connection extends Listenable implements IConnection {
         reject(new TimeoutError(JSON.stringify(msg).substring(0, 100)));
       }, timeout);
     })
-      .then((value) => {
+      .then((value: any) => {
         this._deleteAttachment(ref);
         clearTimeout(timer as number);
         return value;
       })
-      .catch((reason) => {
+      .catch((reason: any) => {
         this._deleteAttachment(ref);
         clearTimeout(timer as number);
         throw reason;
@@ -220,8 +220,8 @@ export class Connection extends Listenable implements IConnection {
     let encodedMsg;
     try {
       encodedMsg = encode_msg(msg);
-    } catch (e: any) {
-      const errorMsg = `Failed to encode msg: reason: ${e}`;
+    } catch (reason: any) {
+      const errorMsg = `Failed to encode msg: reason: ${reason}`;
       console.error(errorMsg + ", msg: ", msg);
       throw new Error(errorMsg);
     }
@@ -234,8 +234,8 @@ export class Connection extends Listenable implements IConnection {
     try {
       this._websocket.send(encodedMsg);
       this._sentAt = this._now();
-    } catch (e: any) {
-      const errorMsg = `Failed to send msg: reason: ${e}`;
+    } catch (reason: any) {
+      const errorMsg = `Failed to send msg: reason: ${reason}`;
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
@@ -270,8 +270,11 @@ export class Connection extends Listenable implements IConnection {
 
     try {
       msg = decode_msg(event.data);
-    } catch (e: any) {
-      console.error(`Failed to decode msg: reason: ${e.message}`);
+    } catch (reason: any) {
+      console.error(
+        `Failed to decode msg: reason: ${reason}, msg: `,
+        event.data
+      );
       return;
     }
 
@@ -291,11 +294,7 @@ export class Connection extends Listenable implements IConnection {
 
       const attachment = this._attachments.get(ref);
       if (typeof attachment === "undefined") {
-        console.debug(
-          `The related request was lost: ref: ${ref}, reply: ${JSON.stringify(
-            msg
-          ).substring(0, 100)}`
-        );
+        console.debug(`The reply's peer request was lost: ref: ${ref}`);
         return;
       }
 
@@ -330,7 +329,7 @@ export class Connection extends Listenable implements IConnection {
 
   private _onError(e: any) {
     console.error(
-      `Connection corrupted: id: ${this._id}, endpoint: ${this._endpoint}, error: ${e.message}`
+      `Connection corrupted: id: ${this._id}, endpoint: ${this._endpoint}, error: ${e}`
     );
     tryWith(() => this._eventHandler.onCorrupted(this));
     this.notify(Event.ON_CORRUPTED, this);
@@ -565,8 +564,8 @@ export class MultiAltEndpointsConnection
         }
         this._connection = new Connection(endpiont, this._options, this);
       })
-      .catch((reason) => {
-        console.error(`Failed to pick endpoint: ${reason.stack}`);
+      .catch((reason: any) => {
+        console.error(`Failed to pick endpoint: reason: ${reason}`);
         this._reconnect();
       });
   }
@@ -591,8 +590,8 @@ export class MultiAltEndpointsConnection
 function tryWith(callback: () => void) {
   try {
     callback();
-  } catch (e: any) {
-    console.error(`Failed to execute: reason: ${e.stack}`);
+  } catch (reason: any) {
+    console.error(`Failed to execute: error: ${reason}`);
   }
 }
 
