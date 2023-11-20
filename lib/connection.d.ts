@@ -47,7 +47,6 @@ export declare class Connection extends Listenable implements IConnection {
     private _shouldRun;
     private _heartbeatTimer;
     private _reconnectTimer;
-    private _sentAt;
     private _receivedAt;
     private _lastRef;
     private _attachments;
@@ -74,7 +73,6 @@ export declare class Connection extends Listenable implements IConnection {
     private _keepAlive;
     private _stopKeepAlive;
     private _closeOrSendHeartbeat;
-    private _hasSentHeartbeat;
     private _isConnectionBroken;
     private _createPingReq;
     private _newRef;

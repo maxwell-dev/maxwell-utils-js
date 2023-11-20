@@ -118,7 +118,6 @@ export class Connection extends Listenable implements IConnection {
   private _shouldRun: boolean;
   private _heartbeatTimer: Timer | null;
   private _reconnectTimer: Timer | null;
-  private _sentAt: number;
   private _receivedAt: number;
   private _lastRef: number;
   private _attachments: Map<number, Attachment>;
@@ -140,8 +139,7 @@ export class Connection extends Listenable implements IConnection {
     this._shouldRun = true;
     this._heartbeatTimer = null;
     this._reconnectTimer = null;
-    this._sentAt = 0;
-    this._receivedAt = 0;
+    this._receivedAt = Connection._now();
     this._lastRef = 0;
     this._attachments = new Map();
     this._condition = new Condition<Connection>(this, () => {
@@ -223,8 +221,8 @@ export class Connection extends Listenable implements IConnection {
     try {
       encodedMsg = encode_msg(msg);
     } catch (reason: any) {
-      const errorMsg = `Failed to encode msg: reason: ${reason}`;
-      console.error(errorMsg + ", msg: ", msg);
+      const errorMsg = `Failed to encode msg: reason: ${reason.message}`;
+      console.error(errorMsg);
       throw new Error(errorMsg);
     }
 
@@ -235,9 +233,8 @@ export class Connection extends Listenable implements IConnection {
     }
     try {
       this._websocket.send(encodedMsg);
-      this._sentAt = Connection._now();
     } catch (reason: any) {
-      const errorMsg = `Failed to send msg: reason: ${reason}`;
+      const errorMsg = `Failed to send msg: reason: ${reason.message}`;
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
@@ -276,7 +273,7 @@ export class Connection extends Listenable implements IConnection {
       msg = decode_msg(event.data);
     } catch (reason: any) {
       console.error(
-        `Failed to decode msg: reason: ${reason}, msg: `,
+        `Failed to decode msg: reason: ${reason.message}, msg: %o`,
         event.data
       );
       return;
@@ -333,7 +330,7 @@ export class Connection extends Listenable implements IConnection {
 
   private _onError(e: any) {
     console.error(
-      `Connection corrupted: id: ${this._id}, endpoint: ${this._endpoint}, error: ${e}`
+      `Connection corrupted: id: ${this._id}, endpoint: ${this._endpoint}, error: ${e.message}`
     );
     tryWith(() => this._eventHandler.onCorrupted(this));
     this.notify(Event.ON_CORRUPTED, this);
@@ -416,17 +413,11 @@ export class Connection extends Listenable implements IConnection {
       this._closeWebsocket();
       return;
     }
-    if (this.isOpen() && !this._hasSentHeartbeat()) {
-      try {
-        this.send(this._createPingReq());
-      } catch (reason: any) {
-        console.warn(`Failed to send heartbeat: reason: ${reason}`);
-      }
+    try {
+      this.send(this._createPingReq());
+    } catch (reason: any) {
+      console.debug(`Failed to send heartbeat: reason: ${reason.message}`);
     }
-  }
-
-  private _hasSentHeartbeat() {
-    return Connection._now() - this._sentAt < this._options.heartbeatInterval;
   }
 
   private _isConnectionBroken() {
@@ -613,7 +604,7 @@ function tryWith(callback: () => void) {
   try {
     callback();
   } catch (reason: any) {
-    console.error(`Failed to execute: error: ${reason}`);
+    console.error(`Failed to execute: reason: ${reason.message}`);
   }
 }
 
