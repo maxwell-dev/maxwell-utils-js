@@ -92,7 +92,7 @@ describe("Connection", () => {
     } catch (e) {
       expect(e).toBeInstanceOf(AbortError);
       expect(e.message).toEqual(
-        `Error: Failed to encode msg: reason: Unknown msg type: function Object() { [native code] }`
+        `Error: Failed to encode msg: reason: undefined`
       );
     } finally {
       conn.close();

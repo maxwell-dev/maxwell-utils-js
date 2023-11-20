@@ -221,9 +221,8 @@ export class Connection extends Listenable implements IConnection {
     try {
       encodedMsg = encode_msg(msg);
     } catch (reason: any) {
-      const errorMsg = `Failed to encode msg: reason: ${reason.message}`;
-      console.error(errorMsg);
-      throw new Error(errorMsg);
+      console.error(`Failed to encode msg: reason: %o`, reason);
+      throw new Error(`Failed to encode msg: reason: ${reason.message}`);
     }
 
     if (this._websocket == null) {
