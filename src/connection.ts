@@ -247,7 +247,7 @@ export class Connection extends Listenable implements IConnection {
   // websocket callbacks
   //===========================================
   private _onOpen() {
-    console.log(
+    console.info(
       `Connection connected: id: ${this._id}, endpoint: ${this._endpoint}`
     );
     this._keepAlive();
@@ -257,7 +257,7 @@ export class Connection extends Listenable implements IConnection {
   }
 
   private _onClose() {
-    console.log(
+    console.info(
       `Connection disconnected: id: ${this._id}, endpoint: ${this._endpoint}`
     );
     this._stopKeepAlive();
@@ -361,14 +361,14 @@ export class Connection extends Listenable implements IConnection {
   }
 
   private _connect() {
-    console.log(`Connecting: id: ${this._id}, endpoint: ${this._endpoint}`);
+    console.info(`Connecting: id: ${this._id}, endpoint: ${this._endpoint}`);
     tryWith(() => this._eventHandler.onConnecting(this));
     this.notify(Event.ON_CONNECTING, this);
     this._websocket = this._openWebsocket();
   }
 
   private _disconnect() {
-    console.log(`Disconnecting: id: ${this._id}, endpoint: ${this._endpoint}`);
+    console.info(`Disconnecting: id: ${this._id}, endpoint: ${this._endpoint}`);
     tryWith(() => this._eventHandler.onDisconnecting(this));
     this.notify(Event.ON_DISCONNECTING, this);
     this._closeWebsocket();
@@ -410,6 +410,9 @@ export class Connection extends Listenable implements IConnection {
 
   private _closeOrSendHeartbeat() {
     if (this._isConnectionBroken()) {
+      console.warn(
+        `Connection broken: id: ${this._id}, endpoint: ${this._endpoint}`
+      );
       this._closeWebsocket();
       return;
     }
