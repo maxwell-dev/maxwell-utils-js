@@ -119,6 +119,7 @@ export class Connection extends Listenable implements IConnection {
   private _heartbeatTimer: Timer | null;
   private _reconnectTimer: Timer | null;
   private _sentAt: number;
+  private _receivedAt: number;
   private _lastRef: number;
   private _attachments: Map<number, Attachment>;
   private _condition: Condition<Connection>;
@@ -140,6 +141,7 @@ export class Connection extends Listenable implements IConnection {
     this._heartbeatTimer = null;
     this._reconnectTimer = null;
     this._sentAt = 0;
+    this._receivedAt = 0;
     this._lastRef = 0;
     this._attachments = new Map();
     this._condition = new Condition<Connection>(this, () => {
@@ -233,7 +235,7 @@ export class Connection extends Listenable implements IConnection {
     }
     try {
       this._websocket.send(encodedMsg);
-      this._sentAt = this._now();
+      this._sentAt = Connection._now();
     } catch (reason: any) {
       const errorMsg = `Failed to send msg: reason: ${reason}`;
       console.error(errorMsg);
@@ -248,7 +250,7 @@ export class Connection extends Listenable implements IConnection {
     console.log(
       `Connection connected: id: ${this._id}, endpoint: ${this._endpoint}`
     );
-    this._repeatSendHeartbeat();
+    this._keepAlive();
     this._condition.notify();
     tryWith(() => this._eventHandler.onConnected(this));
     this.notify(Event.ON_CONNECTED, this);
@@ -258,7 +260,7 @@ export class Connection extends Listenable implements IConnection {
     console.log(
       `Connection disconnected: id: ${this._id}, endpoint: ${this._endpoint}`
     );
-    this._stopRepeatSendHeartbeat();
+    this._stopKeepAlive();
     tryWith(() => this._eventHandler.onDisconnected(this));
     this.notify(Event.ON_DISCONNECTED, this);
     this._reconnect();
@@ -266,6 +268,8 @@ export class Connection extends Listenable implements IConnection {
 
   // eslint-disable-next-line
   private _onMsg(event: any) {
+    this._receivedAt = Connection._now();
+
     let msg: ProtocolMsg;
 
     try {
@@ -386,32 +390,47 @@ export class Connection extends Listenable implements IConnection {
     }
   }
 
-  private _repeatSendHeartbeat() {
+  private _keepAlive() {
     if (!this._shouldRun) {
       return;
     }
-    this._stopRepeatSendHeartbeat();
+    this._stopKeepAlive();
     this._heartbeatTimer = setInterval(
-      this._sendHeartbeat.bind(this),
+      this._closeOrSendHeartbeat.bind(this),
       this._options.heartbeatInterval
     );
   }
 
-  private _stopRepeatSendHeartbeat() {
+  private _stopKeepAlive() {
     if (this._heartbeatTimer !== null) {
       clearInterval(this._heartbeatTimer as number);
       this._heartbeatTimer = null;
     }
   }
 
-  private _sendHeartbeat() {
+  private _closeOrSendHeartbeat() {
+    if (this._isConnectionBroken()) {
+      this._closeWebsocket();
+      return;
+    }
     if (this.isOpen() && !this._hasSentHeartbeat()) {
-      this.send(this._createPingReq());
+      try {
+        this.send(this._createPingReq());
+      } catch (reason: any) {
+        console.warn(`Failed to send heartbeat: reason: ${reason}`);
+      }
     }
   }
 
   private _hasSentHeartbeat() {
-    return this._now() - this._sentAt < this._options.heartbeatInterval;
+    return Connection._now() - this._sentAt < this._options.heartbeatInterval;
+  }
+
+  private _isConnectionBroken() {
+    return (
+      Connection._now() - this._receivedAt >=
+      this._options.heartbeatInterval * 1.5
+    );
   }
 
   private _createPingReq() {
@@ -444,7 +463,7 @@ export class Connection extends Listenable implements IConnection {
     this._attachments.delete(ref);
   }
 
-  private _now() {
+  private static _now() {
     return new Date().getTime();
   }
 }

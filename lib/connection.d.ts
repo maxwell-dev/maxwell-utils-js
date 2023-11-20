@@ -48,6 +48,7 @@ export declare class Connection extends Listenable implements IConnection {
     private _heartbeatTimer;
     private _reconnectTimer;
     private _sentAt;
+    private _receivedAt;
     private _lastRef;
     private _attachments;
     private _condition;
@@ -70,15 +71,16 @@ export declare class Connection extends Listenable implements IConnection {
     private _disconnect;
     private _reconnect;
     private _stopReconnect;
-    private _repeatSendHeartbeat;
-    private _stopRepeatSendHeartbeat;
-    private _sendHeartbeat;
+    private _keepAlive;
+    private _stopKeepAlive;
+    private _closeOrSendHeartbeat;
     private _hasSentHeartbeat;
+    private _isConnectionBroken;
     private _createPingReq;
     private _newRef;
     private _buildUrl;
     private _deleteAttachment;
-    private _now;
+    private static _now;
 }
 type PickEndpoint = () => AbortablePromise<string>;
 export declare class MultiAltEndpointsConnection extends Listenable implements IConnection, IEventHandler {
