@@ -221,7 +221,10 @@ export class Connection extends Listenable implements IConnection {
     try {
       encodedMsg = encode_msg(msg);
     } catch (reason: any) {
-      console.error(`Failed to encode msg: reason: %o`, reason);
+      console.error(
+        `Failed to encode msg: reason: %o`,
+        reason.message ?? reason
+      );
       throw new Error(`Failed to encode msg: reason: ${reason.message}`);
     }
 
@@ -233,9 +236,8 @@ export class Connection extends Listenable implements IConnection {
     try {
       this._websocket.send(encodedMsg);
     } catch (reason: any) {
-      const errorMsg = `Failed to send msg: reason: ${reason.message}`;
-      console.error(errorMsg);
-      throw new Error(errorMsg);
+      console.error(`Failed to send msg: reason: %o`, reason.message ?? reason);
+      throw new Error(`Failed to send msg: reason: ${reason.message}`);
     }
   }
 
@@ -272,7 +274,8 @@ export class Connection extends Listenable implements IConnection {
       msg = decode_msg(event.data);
     } catch (reason: any) {
       console.error(
-        `Failed to decode msg: reason: ${reason.message}, msg: %o`,
+        `Failed to decode msg: reason: %o, msg: %o`,
+        reason.message ?? reason,
         event.data
       );
       return;
@@ -294,7 +297,9 @@ export class Connection extends Listenable implements IConnection {
 
       const attachment = this._attachments.get(ref);
       if (typeof attachment === "undefined") {
-        console.debug(`The reply's peer request was lost: ref: ${ref}`);
+        if (this._options.roundDebugEnabled) {
+          console.debug(`The reply's peer request was lost: ref: ${ref}`);
+        }
         return;
       }
 
@@ -329,7 +334,8 @@ export class Connection extends Listenable implements IConnection {
 
   private _onError(e: any) {
     console.error(
-      `Connection corrupted: id: ${this._id}, endpoint: ${this._endpoint}, error: ${e.message}`
+      `Connection corrupted: id: ${this._id}, endpoint: ${this._endpoint}, error: %o`,
+      e.message ?? e
     );
     tryWith(() => this._eventHandler.onCorrupted(this));
     this.notify(Event.ON_CORRUPTED, this);
@@ -603,7 +609,7 @@ function tryWith(callback: () => void) {
   try {
     callback();
   } catch (reason: any) {
-    console.error(`Failed to execute: reason: ${reason.message}`);
+    console.error(`Failed to execute: reason: %o`, reason.message ?? reason);
   }
 }
 
