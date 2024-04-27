@@ -139,7 +139,7 @@ export class Connection extends Listenable implements IConnection {
     this._shouldRun = true;
     this._heartbeatTimer = null;
     this._reconnectTimer = null;
-    this._receivedAt = Connection._now();
+    this._receivedAt = 0;
     this._lastRef = 0;
     this._attachments = new Map();
     this._condition = new Condition<Connection>(this, () => {
@@ -248,6 +248,7 @@ export class Connection extends Listenable implements IConnection {
     console.info(
       `Connection connected: id: ${this._id}, endpoint: ${this._endpoint}`
     );
+    this._receivedAt = Connection._now();
     this._keepAlive();
     this._condition.notify();
     tryWith(() => this._eventHandler.onConnected(this));
