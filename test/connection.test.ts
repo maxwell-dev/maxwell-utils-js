@@ -2,12 +2,12 @@
 /* eslint-disable jest/no-conditional-expect */
 import { AbortablePromise, AbortError } from "@xuchaoqian/abortable-promise";
 import { msg_types } from "maxwell-protocol";
-import { Connection, Options, TimeoutError, Event } from "../src/index";
+import { Connection, defaultOptions, TimeoutError, Event } from "../src/index";
 import { MultiAltEndpointsConnection } from "../src/connection";
 
 describe("Connection", () => {
   it("normal request", async () => {
-    const conn = new Connection("localhost:10000", new Options());
+    const conn = new Connection("localhost:10000", defaultOptions());
     expect(conn).toBeInstanceOf(Connection);
     try {
       await conn.waitOpen();
@@ -28,7 +28,7 @@ describe("Connection", () => {
   });
 
   it("path not exist", async () => {
-    const conn = new Connection("localhost:10000", new Options());
+    const conn = new Connection("localhost:10000", defaultOptions());
     expect(conn).toBeInstanceOf(Connection);
     try {
       await conn.waitOpen();
@@ -51,20 +51,20 @@ describe("Connection", () => {
   });
 
   it("timeout to connect", async () => {
-    const conn = new Connection("localhost:1", new Options());
+    const conn = new Connection("localhost:1", defaultOptions());
     expect(conn).toBeInstanceOf(Connection);
     try {
       await conn.waitOpen(1000);
     } catch (e) {
       expect(e).toBeInstanceOf(TimeoutError);
-      expect(e.message).toEqual(`Timeout to wait: waiter: 0`);
+      expect(e.message).toEqual("Timeout to wait: waiter: 2-0");
     } finally {
       conn.close();
     }
   });
 
   it("timeout to request", async () => {
-    const conn = new Connection("localhost:10000", new Options());
+    const conn = new Connection("localhost:10000", defaultOptions());
     expect(conn).toBeInstanceOf(Connection);
     try {
       await conn.waitOpen();
@@ -81,7 +81,7 @@ describe("Connection", () => {
   });
 
   it("failed to encode", async () => {
-    const conn = new Connection("localhost:10000", new Options());
+    const conn = new Connection("localhost:10000", defaultOptions());
     expect(conn).toBeInstanceOf(Connection);
     try {
       await conn.waitOpen();
@@ -100,7 +100,7 @@ describe("Connection", () => {
   });
 
   it("on connected", async () => {
-    const conn = new Connection("localhost:10000", new Options());
+    const conn = new Connection("localhost:10000", defaultOptions());
     expect(conn).toBeInstanceOf(Connection);
     try {
       const ready = new Promise((resolve) => {
@@ -121,7 +121,7 @@ describe("MultiAltEndpointsConnection", () => {
   it("normal request", async () => {
     const conn = new MultiAltEndpointsConnection(
       () => AbortablePromise.resolve("localhost:10000"),
-      new Options()
+      defaultOptions()
     );
     expect(conn).toBeInstanceOf(MultiAltEndpointsConnection);
     try {
@@ -145,14 +145,14 @@ describe("MultiAltEndpointsConnection", () => {
   it("timeout to connect", async () => {
     const conn = new MultiAltEndpointsConnection(
       () => AbortablePromise.resolve("localhost:1"),
-      new Options()
+      defaultOptions()
     );
     expect(conn).toBeInstanceOf(MultiAltEndpointsConnection);
     try {
       await conn.waitOpen(1000);
     } catch (e) {
       expect(e).toBeInstanceOf(TimeoutError);
-      expect(e.message).toEqual(`Timeout to wait: waiter: 0`);
+      expect(e.message).toEqual(`Timeout to wait: waiter: 8-0`);
     } finally {
       conn.close();
     }
@@ -161,7 +161,7 @@ describe("MultiAltEndpointsConnection", () => {
   it("timeout to request", async () => {
     const conn = new MultiAltEndpointsConnection(
       () => AbortablePromise.resolve("localhost:10000"),
-      new Options()
+      defaultOptions()
     );
     expect(conn).toBeInstanceOf(MultiAltEndpointsConnection);
     try {
@@ -181,7 +181,7 @@ describe("MultiAltEndpointsConnection", () => {
   it("on connected", async () => {
     const conn = new MultiAltEndpointsConnection(
       () => AbortablePromise.resolve("localhost:10000"),
-      new Options()
+      defaultOptions()
     );
     expect(conn).toBeInstanceOf(MultiAltEndpointsConnection);
     try {

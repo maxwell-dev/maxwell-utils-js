@@ -4,7 +4,10 @@ import { Timer, TimeoutError } from "./internal";
 type Cond = () => boolean;
 type Watier<T> = [(target: T) => void, (reason?: unknown) => void];
 
+let ID_SEED = 0;
+
 export class Condition<T> {
+  private _id: number = ID_SEED++;
   private _target: T;
   private _cond: Cond;
   private _waiters: Map<number, Watier<T>>;
@@ -27,7 +30,7 @@ export class Condition<T> {
       this._waiters.set(waiterId, [resolve, reject]);
       timer = setTimeout(() => {
         if (typeof msg === "undefined") {
-          msg = `Timeout to wait: waiter: ${waiterId}`;
+          msg = `Timeout to wait: waiter: ${this._id}-${waiterId}`;
         } else {
           msg = JSON.stringify(msg).substring(0, 100);
         }

@@ -1,22 +1,14 @@
 import { AbortablePromise } from "@xuchaoqian/abortable-promise";
-import { ProtocolMsg, Listenable, IListenable } from "./internal";
-export interface IOptions {
+import { Listenable, IListenable } from "./internal";
+export interface Options {
     reconnectDelay?: number;
     heartbeatInterval?: number;
     roundTimeout?: number;
     retryRouteCount?: number;
     sslEnabled?: boolean;
-    roundDebugEnabled?: boolean;
+    roundLogEnabled?: boolean;
 }
-export declare class Options implements IOptions {
-    readonly reconnectDelay: number;
-    readonly heartbeatInterval: number;
-    readonly roundTimeout: number;
-    readonly retryRouteCount: number;
-    readonly sslEnabled: boolean;
-    readonly roundDebugEnabled: boolean;
-    constructor(options?: IOptions);
-}
+export declare function defaultOptions(options?: Options): Required<Options>;
 export declare enum Event {
     ON_CONNECTING = 100,
     ON_CONNECTED = 101,
@@ -31,6 +23,14 @@ export interface IEventHandler {
     onDisconnected(connection: IConnection, ...rest: any[]): void;
     onCorrupted(connection: IConnection, ...rest: any[]): void;
 }
+export declare class DefaultEventHandler implements IEventHandler {
+    onConnecting(connection: IConnection, ...rest: any[]): void;
+    onConnected(connection: IConnection, ...rest: any[]): void;
+    onDisconnecting(connection: IConnection, ...rest: any[]): void;
+    onDisconnected(connection: IConnection, ...rest: any[]): void;
+    onCorrupted(connection: IConnection, ...rest: any[]): void;
+}
+export type ProtocolMsg = any;
 export interface IConnection extends IListenable {
     close(): void;
     endpoint(): string | undefined;
@@ -52,7 +52,7 @@ export declare class Connection extends Listenable implements IConnection {
     private _attachments;
     private _condition;
     private _websocket;
-    constructor(endpoint: string, options: Options, eventHandler?: IEventHandler);
+    constructor(endpoint: string, options: Required<Options>, eventHandler?: IEventHandler);
     close(): void;
     id(): number;
     endpoint(): string;
@@ -90,7 +90,7 @@ export declare class MultiAltEndpointsConnection extends Listenable implements I
     private _reconnectTimer;
     private _condition;
     private _connection;
-    constructor(pickEndpoint: PickEndpoint, options: Options, eventHandler?: IEventHandler);
+    constructor(pickEndpoint: PickEndpoint, options: Required<Options>, eventHandler?: IEventHandler);
     close(): void;
     endpoint(): string | undefined;
     isOpen(): boolean;

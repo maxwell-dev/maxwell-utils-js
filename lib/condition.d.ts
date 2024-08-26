@@ -1,6 +1,7 @@
 import { AbortablePromise } from "@xuchaoqian/abortable-promise";
 type Cond = () => boolean;
 export declare class Condition<T> {
+    private _id;
     private _target;
     private _cond;
     private _waiters;

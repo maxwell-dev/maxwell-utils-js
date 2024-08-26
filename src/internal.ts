@@ -1,28 +1,31 @@
-import { ProtocolMsg, Timer } from "./types";
+import { Timer } from "./types";
 import { Condition } from "./condition";
 import { TimeoutError } from "./timeout-error";
 import { Listenable, IListenable } from "./listenable";
 import {
+  ProtocolMsg,
   Event,
   IEventHandler,
-  IOptions,
+  DefaultEventHandler,
   Options,
+  defaultOptions,
   IConnection,
   Connection,
   MultiAltEndpointsConnection,
 } from "./connection";
 
 export {
-  ProtocolMsg,
   Timer,
-  Event,
-  IEventHandler,
   Condition,
-  IOptions,
-  Options,
   TimeoutError,
   Listenable,
   IListenable,
+  ProtocolMsg,
+  Event,
+  IEventHandler,
+  DefaultEventHandler,
+  Options,
+  defaultOptions,
   IConnection,
   Connection,
   MultiAltEndpointsConnection,

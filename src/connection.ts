@@ -1,7 +1,6 @@
 import { AbortablePromise } from "@xuchaoqian/abortable-promise";
 import { msg_types, encode_msg, decode_msg } from "maxwell-protocol";
 import {
-  ProtocolMsg,
   Timer,
   Condition,
   Listenable,
@@ -12,58 +11,27 @@ import {
 const WebSocketImpl =
   typeof WebSocket !== "undefined" ? WebSocket : require("ws");
 
-export interface IOptions {
+export interface Options {
   reconnectDelay?: number;
   heartbeatInterval?: number;
   roundTimeout?: number;
   retryRouteCount?: number;
   sslEnabled?: boolean;
-  roundDebugEnabled?: boolean;
+  roundLogEnabled?: boolean;
 }
 
-export class Options implements IOptions {
-  readonly reconnectDelay: number;
-  readonly heartbeatInterval: number;
-  readonly roundTimeout: number;
-  readonly retryRouteCount: number;
-  readonly sslEnabled: boolean;
-  readonly roundDebugEnabled: boolean;
-
-  constructor(options?: IOptions) {
-    if (typeof options === "undefined") {
-      options = {};
-    }
-    if (typeof options.reconnectDelay === "undefined") {
-      this.reconnectDelay = 3000;
-    } else {
-      this.reconnectDelay = options.reconnectDelay;
-    }
-    if (typeof options.heartbeatInterval === "undefined") {
-      this.heartbeatInterval = 10000;
-    } else {
-      this.heartbeatInterval = options.heartbeatInterval;
-    }
-    if (typeof options.roundTimeout === "undefined") {
-      this.roundTimeout = 15000;
-    } else {
-      this.roundTimeout = options.roundTimeout;
-    }
-    if (typeof options.retryRouteCount === "undefined") {
-      this.retryRouteCount = 0;
-    } else {
-      this.retryRouteCount = options.retryRouteCount;
-    }
-    if (typeof options.sslEnabled === "undefined") {
-      this.sslEnabled = false;
-    } else {
-      this.sslEnabled = options.sslEnabled;
-    }
-    if (typeof options.roundDebugEnabled === "undefined") {
-      this.roundDebugEnabled = false;
-    } else {
-      this.roundDebugEnabled = options.roundDebugEnabled;
-    }
+export function defaultOptions(options?: Options): Required<Options> {
+  if (typeof options === "undefined") {
+    options = {};
   }
+  return {
+    reconnectDelay: options.reconnectDelay ?? 3000,
+    heartbeatInterval: options.heartbeatInterval ?? 10000,
+    roundTimeout: options.roundTimeout ?? 15000,
+    retryRouteCount: options.retryRouteCount ?? 0,
+    sslEnabled: options.sslEnabled ?? false,
+    roundLogEnabled: options.roundLogEnabled ?? false,
+  };
 }
 
 export enum Event {
@@ -82,12 +50,24 @@ export interface IEventHandler {
   onCorrupted(connection: IConnection, ...rest: any[]): void;
 }
 
-class DefaultEventHandler implements IEventHandler {
-  onConnecting(): void {}
-  onConnected(): void {}
-  onDisconnecting(): void {}
-  onDisconnected(): void {}
-  onCorrupted(): void {}
+export class DefaultEventHandler implements IEventHandler {
+  onConnecting(connection: IConnection, ...rest: any[]): void {}
+  onConnected(connection: IConnection, ...rest: any[]): void {}
+  onDisconnecting(connection: IConnection, ...rest: any[]): void {}
+  onDisconnected(connection: IConnection, ...rest: any[]): void {}
+  onCorrupted(connection: IConnection, ...rest: any[]): void {}
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type ProtocolMsg = any;
+
+export interface IConnection extends IListenable {
+  close(): void;
+  endpoint(): string | undefined;
+  isOpen(): boolean;
+  waitOpen(timeout?: number): AbortablePromise<IConnection>;
+  request(msg: ProtocolMsg, timeout?: number): AbortablePromise<ProtocolMsg>;
+  send(msg: ProtocolMsg): void;
 }
 
 // [resolve, reject, msg, retryRouteCount, timer|null]
@@ -99,13 +79,12 @@ type Attachment = [
   Timer | null,
 ];
 
-export interface IConnection extends IListenable {
-  close(): void;
-  endpoint(): string | undefined;
-  isOpen(): boolean;
-  waitOpen(timeout?: number): AbortablePromise<IConnection>;
-  request(msg: ProtocolMsg, timeout?: number): AbortablePromise<ProtocolMsg>;
-  send(msg: ProtocolMsg): void;
+function tryWith(callback: () => void) {
+  try {
+    callback();
+  } catch (reason: any) {
+    console.error("Failed to execute: reason: %o", reason.message ?? reason);
+  }
 }
 
 let ID_SEED = 0;
@@ -113,7 +92,7 @@ let ID_SEED = 0;
 export class Connection extends Listenable implements IConnection {
   private _id: number = ID_SEED++;
   private _endpoint: string;
-  private _options: Options;
+  private _options: Required<Options>;
   private _eventHandler: IEventHandler;
   private _shouldRun: boolean;
   private _heartbeatTimer: Timer | null;
@@ -129,8 +108,8 @@ export class Connection extends Listenable implements IConnection {
   //===========================================
   constructor(
     endpoint: string,
-    options: Options,
-    eventHandler: IEventHandler = new DefaultEventHandler()
+    options: Required<Options>,
+    eventHandler: IEventHandler = new DefaultEventHandler(),
   ) {
     super();
     this._endpoint = endpoint;
@@ -212,31 +191,31 @@ export class Connection extends Listenable implements IConnection {
   }
 
   send(msg: ProtocolMsg): void {
-    if (this._options.roundDebugEnabled) {
+    if (this._options.roundLogEnabled) {
       const limitedMsg = JSON.stringify(msg).substring(0, 100);
       console.debug(`Sending msg: [${msg.constructor.name}]${limitedMsg}`);
     }
 
-    let encodedMsg;
+    let encodedMsg: any;
     try {
       encodedMsg = encode_msg(msg);
     } catch (reason: any) {
       console.error(
-        `Failed to encode msg: reason: %o`,
-        reason.message ?? reason
+        "Failed to encode msg: reason: %o",
+        reason.message ?? reason,
       );
       throw new Error(`Failed to encode msg: reason: ${reason.message}`);
     }
 
     if (this._websocket == null) {
-      const errorMsg = `Failed to send msg: reason: connection lost`;
+      const errorMsg = "Failed to send msg: reason: connection lost";
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
     try {
       this._websocket.send(encodedMsg);
     } catch (reason: any) {
-      console.error(`Failed to send msg: reason: %o`, reason.message ?? reason);
+      console.error("Failed to send msg: reason: %o", reason.message ?? reason);
       throw new Error(`Failed to send msg: reason: ${reason.message}`);
     }
   }
@@ -246,7 +225,7 @@ export class Connection extends Listenable implements IConnection {
   //===========================================
   private _onOpen() {
     console.info(
-      `Connection connected: id: ${this._id}, endpoint: ${this._endpoint}`
+      `Connection connected: id: ${this._id}, endpoint: ${this._endpoint}`,
     );
     this._receivedAt = Connection._now();
     this._keepAlive();
@@ -257,7 +236,7 @@ export class Connection extends Listenable implements IConnection {
 
   private _onClose() {
     console.info(
-      `Connection disconnected: id: ${this._id}, endpoint: ${this._endpoint}`
+      `Connection disconnected: id: ${this._id}, endpoint: ${this._endpoint}`,
     );
     this._stopKeepAlive();
     tryWith(() => this._eventHandler.onDisconnected(this));
@@ -275,9 +254,9 @@ export class Connection extends Listenable implements IConnection {
       msg = decode_msg(event.data);
     } catch (reason: any) {
       console.error(
-        `Failed to decode msg: reason: %o, msg: %o`,
+        "Failed to decode msg: reason: %o, msg: %o",
         reason.message ?? reason,
-        event.data
+        event.data,
       );
       return;
     }
@@ -287,10 +266,10 @@ export class Connection extends Listenable implements IConnection {
     if (msgType === msg_types.ping_rep_t) {
       // do nothing
     } else {
-      if (this._options.roundDebugEnabled) {
+      if (this._options.roundLogEnabled) {
         console.debug(
           `Received msg: [${msgType.name}]` +
-            `${JSON.stringify(msg).substring(0, 100)}`
+            `${JSON.stringify(msg).substring(0, 100)}`,
         );
       }
 
@@ -298,7 +277,7 @@ export class Connection extends Listenable implements IConnection {
 
       const attachment = this._attachments.get(ref);
       if (typeof attachment === "undefined") {
-        if (this._options.roundDebugEnabled) {
+        if (this._options.roundLogEnabled) {
           console.debug(`The reply's peer request was lost: ref: ${ref}`);
         }
         return;
@@ -313,9 +292,12 @@ export class Connection extends Listenable implements IConnection {
           msg.desc.includes("frontend_not_found") &&
           attachment[3] < this._options.retryRouteCount
         ) {
-          attachment[4] = setTimeout(() => {
-            this.send(attachment[2]);
-          }, 500 * ++attachment[3]);
+          attachment[4] = setTimeout(
+            () => {
+              this.send(attachment[2]);
+            },
+            500 * ++attachment[3],
+          );
         } else {
           try {
             attachment[1](new Error(`code: ${msg.code}, desc: ${msg.desc}`));
@@ -336,7 +318,7 @@ export class Connection extends Listenable implements IConnection {
   private _onError(e: any) {
     console.error(
       `Connection corrupted: id: ${this._id}, endpoint: ${this._endpoint}, error: %o`,
-      e.message ?? e
+      e.message ?? e,
     );
     tryWith(() => this._eventHandler.onCorrupted(this));
     this.notify(Event.ON_CORRUPTED, this);
@@ -400,7 +382,7 @@ export class Connection extends Listenable implements IConnection {
     this._stopKeepAlive();
     this._heartbeatTimer = setInterval(
       this._closeOrSendHeartbeat.bind(this),
-      this._options.heartbeatInterval
+      this._options.heartbeatInterval,
     );
   }
 
@@ -414,7 +396,7 @@ export class Connection extends Listenable implements IConnection {
   private _closeOrSendHeartbeat() {
     if (this._isConnectionBroken()) {
       console.warn(
-        `Connection broken: id: ${this._id}, endpoint: ${this._endpoint}`
+        `Connection broken: id: ${this._id}, endpoint: ${this._endpoint}`,
       );
       this._closeWebsocket();
       return;
@@ -475,7 +457,7 @@ export class MultiAltEndpointsConnection
   implements IConnection, IEventHandler
 {
   private _pickEndpoint: PickEndpoint;
-  private _options: Options;
+  private _options: Required<Options>;
   private _eventHandler: IEventHandler;
   private _shouldRun: boolean;
   private _connectTask: AbortablePromise<void> | null;
@@ -489,8 +471,8 @@ export class MultiAltEndpointsConnection
 
   constructor(
     pickEndpoint: PickEndpoint,
-    options: Options,
-    eventHandler: IEventHandler = new DefaultEventHandler()
+    options: Required<Options>,
+    eventHandler: IEventHandler = new DefaultEventHandler(),
   ) {
     super();
     this._pickEndpoint = pickEndpoint;
@@ -531,13 +513,21 @@ export class MultiAltEndpointsConnection
 
   request(
     msg: any,
-    timeout?: number | undefined
+    timeout?: number | undefined,
   ): AbortablePromise<ProtocolMsg> {
-    return this._connection!.request(msg, timeout);
+    if (this._connection === null) {
+      return AbortablePromise.reject(
+        new Error("Failed to request: reason: connection lost"),
+      );
+    }
+    return this._connection.request(msg, timeout);
   }
 
   send(msg: any): void {
-    return this._connection!.send(msg);
+    if (this._connection === null) {
+      throw new Error("Failed to send msg: reason: connection lost");
+    }
+    this._connection.send(msg);
   }
 
   //===========================================
@@ -603,14 +593,6 @@ export class MultiAltEndpointsConnection
       clearTimeout(this._reconnectTimer as number);
       this._reconnectTimer = null;
     }
-  }
-}
-
-function tryWith(callback: () => void) {
-  try {
-    callback();
-  } catch (reason: any) {
-    console.error(`Failed to execute: reason: %o`, reason.message ?? reason);
   }
 }
 
