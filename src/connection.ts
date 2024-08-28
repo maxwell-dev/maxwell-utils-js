@@ -111,7 +111,7 @@ export class Connection extends Listenable implements IConnection {
   private _lastRef: number;
   private _attachments: Map<number, Attachment>;
   private _condition: Condition<Connection>;
-  private _websocket: WebSocket | null;
+  private _websocket: typeof WebSocketImpl | null;
 
   //===========================================
   // APIs
@@ -280,7 +280,7 @@ export class Connection extends Listenable implements IConnection {
   // websocket callbacks
   //===========================================
 
-  private _onMsg(event: any) {
+  private _onMsg(event: any): void {
     this._receivedAt = now();
 
     let msg: ProtocolMsg;
@@ -332,7 +332,7 @@ export class Connection extends Listenable implements IConnection {
     }
   }
 
-  private _onOpen() {
+  private _onOpen(): void {
     console.info(
       `<${this.name()}>Connection connected: endpoint: ${this._endpoint}`,
     );
@@ -347,7 +347,7 @@ export class Connection extends Listenable implements IConnection {
     this.notify(Event.ON_CONNECTED, this);
   }
 
-  private _onClose() {
+  private _onClose(): void {
     console.info(
       `<${this.name()}>Connection disconnected: endpoint: ${this._endpoint}`,
     );
@@ -358,7 +358,7 @@ export class Connection extends Listenable implements IConnection {
     this._reconnect();
   }
 
-  private _onError(reason: any) {
+  private _onError(reason: any): void {
     console.error(
       `<${this.name()}>Connection corrupted: endpoint: ${this._endpoint}, error: %o`,
       reason.message ?? reason,
@@ -371,7 +371,7 @@ export class Connection extends Listenable implements IConnection {
   // internal functions
   //===========================================
 
-  private _openWebsocket() {
+  private _openWebsocket(): typeof WebSocketImpl {
     const websocket = new WebSocketImpl(this._buildUrl());
     websocket.binaryType = "arraybuffer";
     websocket.onmessage = this._onMsg.bind(this);
@@ -381,28 +381,28 @@ export class Connection extends Listenable implements IConnection {
     return websocket;
   }
 
-  private _closeWebsocket() {
+  private _closeWebsocket(): void {
     if (this._websocket !== null) {
       this._websocket.close();
       this._websocket = null;
     }
   }
 
-  private _connect() {
+  private _connect(): void {
     console.info(`<${this.name()}>Connecting: endpoint: ${this._endpoint}`);
     tryWith(this, () => this._eventHandler.onConnecting?.(this));
     this.notify(Event.ON_CONNECTING, this);
     this._websocket = this._openWebsocket();
   }
 
-  private _disconnect() {
+  private _disconnect(): void {
     console.info(`<${this.name()}>Disconnecting: endpoint: ${this._endpoint}`);
     tryWith(this, () => this._eventHandler.onDisconnecting?.(this));
     this.notify(Event.ON_DISCONNECTING, this);
     this._closeWebsocket();
   }
 
-  private _reconnect(delay = this._options.reconnectDelay) {
+  private _reconnect(delay = this._options.reconnectDelay): void {
     if (!this._shouldRun) {
       return;
     }
@@ -411,7 +411,7 @@ export class Connection extends Listenable implements IConnection {
     this._reconnectTimer = setTimeout(this._connect.bind(this), delay);
   }
 
-  private _stopReconnect() {
+  private _stopReconnect(): void {
     if (this._reconnectTimer !== null) {
       clearTimeout(this._reconnectTimer as number);
       this._reconnectTimer = null;
@@ -420,7 +420,7 @@ export class Connection extends Listenable implements IConnection {
 
   // This function will repeatedly execute at random intervals
   // between 1 and heartbeatInterval seconds.
-  private _repeatHeartbeat() {
+  private _repeatHeartbeat(): void {
     if (!this._shouldRun) {
       return;
     }
@@ -441,18 +441,18 @@ export class Connection extends Listenable implements IConnection {
     );
   }
 
-  private _stopRepeatHeartbeat() {
+  private _stopRepeatHeartbeat(): void {
     if (this._heartbeatTimer !== null) {
       clearTimeout(this._heartbeatTimer as number);
       this._heartbeatTimer = null;
     }
   }
 
-  private _calcDelayForNextHeartbeat(nowMs: number) {
+  private _calcDelayForNextHeartbeat(nowMs: number): number {
     return this._sentAt + this._options.heartbeatInterval - nowMs;
   }
 
-  private _sendHeartbeat() {
+  private _sendHeartbeat(): void {
     try {
       this.send(this._createPingReq());
     } catch (reason: any) {
@@ -462,7 +462,7 @@ export class Connection extends Listenable implements IConnection {
     }
   }
 
-  private _repeatCheckStatus() {
+  private _repeatCheckStatus(): void {
     if (!this._shouldRun) {
       return;
     }
@@ -475,14 +475,14 @@ export class Connection extends Listenable implements IConnection {
     }, this._calcIntervalForCheckStatus());
   }
 
-  private _stopRepeatCheckStatus() {
+  private _stopRepeatCheckStatus(): void {
     if (this._checkStatusTimer !== null) {
       clearInterval(this._checkStatusTimer as number);
       this._checkStatusTimer = null;
     }
   }
 
-  private _checkUnhealthyTimeout(nowMs: number) {
+  private _checkUnhealthyTimeout(nowMs: number): void {
     if (this._hasReceivedBeforeUnhealthyTimeout(nowMs)) {
       this._isHealthy = true;
     } else {
@@ -496,7 +496,7 @@ export class Connection extends Listenable implements IConnection {
     }
   }
 
-  private _checkIdleTimeout(nowMs: number) {
+  private _checkIdleTimeout(nowMs: number): void {
     if (!this._hasSentNonePingBeforeIdleTimeout(nowMs)) {
       console.info(
         `<${this.name()}>Connection became idle: endpoint: %s`,
@@ -507,32 +507,32 @@ export class Connection extends Listenable implements IConnection {
     }
   }
 
-  private _hasReceivedBeforeUnhealthyTimeout(nowMs: number) {
+  private _hasReceivedBeforeUnhealthyTimeout(nowMs: number): boolean {
     return nowMs - this._receivedAt < this._options.unhealthyTimeout;
   }
 
-  private _hasSentNonePingBeforeIdleTimeout(nowMs: number) {
+  private _hasSentNonePingBeforeIdleTimeout(nowMs: number): boolean {
     return nowMs - this._sendNonePingAt < this._options.idleTimeout;
   }
 
-  private _calcIntervalForCheckStatus() {
+  private _calcIntervalForCheckStatus(): number {
     return Math.floor(
       Math.min(this._options.heartbeatInterval, this._options.idleTimeout) / 2,
     );
   }
 
-  private _createPingReq() {
+  private _createPingReq(): typeof msg_types.ping_req_t.prototype {
     return new msg_types.ping_req_t({});
   }
 
-  private _newRef() {
+  private _newRef(): number {
     if (this._lastRef > 100000000) {
       this._lastRef = 1;
     }
     return ++this._lastRef;
   }
 
-  private _buildUrl() {
+  private _buildUrl(): string {
     if (this._options.sslEnabled) {
       return `wss://${this._endpoint}/$ws`;
     } else {
@@ -540,7 +540,7 @@ export class Connection extends Listenable implements IConnection {
     }
   }
 
-  private _deleteAttachment(ref: number) {
+  private _deleteAttachment(ref: number): void {
     this._attachments.delete(ref);
   }
 }
@@ -716,7 +716,7 @@ export class MultiAltEndpointsConnection
   // internal functions
   //===========================================
 
-  private _connect() {
+  private _connect(): void {
     this._connectTask = this._pickEndpoint()
       .then((endpiont) => {
         if (!this._shouldRun) {
@@ -732,7 +732,7 @@ export class MultiAltEndpointsConnection
       });
   }
 
-  private _reconnect(delay = this._options.reconnectDelay) {
+  private _reconnect(delay = this._options.reconnectDelay): void {
     if (!this._shouldRun) {
       return;
     }
@@ -741,7 +741,7 @@ export class MultiAltEndpointsConnection
     this._reconnectTimer = setTimeout(this._connect.bind(this), delay);
   }
 
-  private _stopReconnect() {
+  private _stopReconnect(): void {
     if (this._reconnectTimer !== null) {
       clearTimeout(this._reconnectTimer as number);
       this._reconnectTimer = null;
@@ -923,7 +923,7 @@ export class ConnectionPool
   // internal functions
   //===========================================
 
-  _createConnection(): MultiAltEndpointsConnection {
+  private _createConnection(): MultiAltEndpointsConnection {
     return new MultiAltEndpointsConnection(
       this._pickEndpoint,
       this._options,
@@ -931,7 +931,7 @@ export class ConnectionPool
     );
   }
 
-  _tryDropConnection(connection: MultiAltEndpointsConnection): void {
+  private _tryDropConnection(connection: MultiAltEndpointsConnection): void {
     const oldPoolSize = this._connections.length;
     const minPoolSize = this._options.minPoolSize;
     if (oldPoolSize <= minPoolSize) {
@@ -952,7 +952,7 @@ export class ConnectionPool
     connection.close();
   }
 
-  _nextIndex(): number {
+  private _nextIndex(): number {
     if (this._indexSeed >= this._connections.length - 1) {
       this._indexSeed = 0;
     } else {
