@@ -12,7 +12,7 @@ import {
 const WebSocketImpl =
   typeof WebSocket !== "undefined" ? WebSocket : require("ws");
 
-export interface Options {
+export interface ConnectionOptions {
   reconnectDelay?: number;
   heartbeatInterval?: number;
   roundTimeout?: number;
@@ -22,7 +22,9 @@ export interface Options {
   roundLogEnabled?: boolean;
 }
 
-export function defaultOptions(options?: Options): Required<Options> {
+export function makeConnectionOptions(
+  options?: ConnectionOptions,
+): Required<ConnectionOptions> {
   if (typeof options === "undefined") {
     options = {};
   }
@@ -96,7 +98,7 @@ let ID_SEED = 0;
 export class Connection extends Listenable implements IConnection {
   private _id: number = ++ID_SEED;
   private _endpoint: string;
-  private _options: Required<Options>;
+  private _options: Required<ConnectionOptions>;
   private _eventHandler: IEventHandler;
   private _shouldRun: boolean;
   private _heartbeatTimer: Timer | null;
@@ -116,7 +118,7 @@ export class Connection extends Listenable implements IConnection {
   //===========================================
   constructor(
     endpoint: string,
-    options: Required<Options>,
+    options: Required<ConnectionOptions>,
     eventHandler: IEventHandler = new DefaultEventHandler(),
   ) {
     super();
@@ -551,7 +553,7 @@ export class MultiAltEndpointsConnection
 {
   private _id: number = ++ID_SEED;
   private _pickEndpoint: PickEndpoint;
-  private _options: Required<Options>;
+  private _options: Required<ConnectionOptions>;
   private _eventHandler: IEventHandler;
   private _shouldRun: boolean;
   private _connectTask: AbortablePromise<void> | null;
@@ -565,7 +567,7 @@ export class MultiAltEndpointsConnection
 
   constructor(
     pickEndpoint: PickEndpoint,
-    options: Required<Options>,
+    options: Required<ConnectionOptions>,
     eventHandler: IEventHandler = new DefaultEventHandler(),
   ) {
     super();
@@ -747,21 +749,21 @@ export class MultiAltEndpointsConnection
   }
 }
 
-export type PoolOptions = {
+export type ConnectionPoolOptions = {
   minPoolSize?: number;
   maxPoolSize?: number;
-} & Options;
+} & ConnectionOptions;
 
-export function defaultPoolOptions(
-  options?: PoolOptions,
-): Required<PoolOptions> {
+export function makeConnectionPoolOptions(
+  options?: ConnectionPoolOptions,
+): Required<ConnectionPoolOptions> {
   if (typeof options === "undefined") {
     options = {};
   }
   return {
     minPoolSize: options.minPoolSize ?? 1,
     maxPoolSize: options.maxPoolSize ?? 5,
-    ...defaultOptions(options),
+    ...makeConnectionOptions(options),
   };
 }
 
@@ -771,7 +773,7 @@ export class ConnectionPool
 {
   private _id: number = ++ID_SEED;
   private _pickEndpoint: PickEndpoint;
-  private _options: Required<PoolOptions>;
+  private _options: Required<ConnectionPoolOptions>;
   private _eventHandler: IEventHandler;
   private _connections: MultiAltEndpointsConnection[];
   private _indexSeed: number;
@@ -782,7 +784,7 @@ export class ConnectionPool
 
   constructor(
     pickEndpoint: PickEndpoint,
-    options: Required<PoolOptions>,
+    options: Required<ConnectionPoolOptions>,
     eventHandler: IEventHandler = new DefaultEventHandler(),
   ) {
     super();
