@@ -12,7 +12,11 @@ import {
   IConnection,
   Connection,
   MultiAltEndpointsConnection,
+  PoolOptions,
+  defaultPoolOptions,
+  ConnectionPool,
 } from "./connection";
+import { now, sleep } from "./utils";
 
 export {
   Timer,
@@ -29,4 +33,9 @@ export {
   IConnection,
   Connection,
   MultiAltEndpointsConnection,
+  PoolOptions,
+  defaultPoolOptions,
+  ConnectionPool,
+  now,
+  sleep,
 };

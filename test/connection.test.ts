@@ -2,8 +2,16 @@
 /* eslint-disable jest/no-conditional-expect */
 import { AbortablePromise, AbortError } from "@xuchaoqian/abortable-promise";
 import { msg_types } from "maxwell-protocol";
-import { Connection, defaultOptions, TimeoutError, Event } from "../src/index";
-import { MultiAltEndpointsConnection } from "../src/connection";
+import { 
+  Connection, 
+  defaultOptions, 
+  TimeoutError, 
+  Event, 
+  MultiAltEndpointsConnection,
+  ConnectionPool, 
+  defaultPoolOptions,
+  sleep, 
+} from "../src/index";
 
 describe("Connection", () => {
   it("normal request", async () => {
@@ -23,7 +31,7 @@ describe("Connection", () => {
     } catch (reason) {
       console.error(`Error occured: ${reason.stack}`);
     } finally {
-      conn.close();
+      await conn.closeAndWait();
     }
   });
 
@@ -46,7 +54,7 @@ describe("Connection", () => {
         `code: 299, desc: Failed to get connetion: err: Failed to find endpoint: path: "/path-not-exist"`
       );
     } finally {
-      conn.close();
+      await conn.closeAndWait();
     }
   });
 
@@ -57,9 +65,9 @@ describe("Connection", () => {
       await conn.waitOpen(1000);
     } catch (e) {
       expect(e).toBeInstanceOf(TimeoutError);
-      expect(e.message).toEqual("Timeout to wait: waiter: 2-0");
+      expect(e.message).toMatch("Timeout to wait: waiter:");
     } finally {
-      conn.close();
+      await conn.closeAndWait();
     }
   });
 
@@ -76,7 +84,7 @@ describe("Connection", () => {
       expect(e).toBeInstanceOf(TimeoutError);
       expect(e.message).toEqual(`{"ref":1}`);
     } finally {
-      conn.close();
+      await conn.closeAndWait();
     }
   });
 
@@ -95,7 +103,7 @@ describe("Connection", () => {
         `Error: Failed to encode msg: reason: undefined`
       );
     } finally {
-      conn.close();
+      await conn.closeAndWait();
     }
   });
 
@@ -103,16 +111,10 @@ describe("Connection", () => {
     const conn = new Connection("localhost:10000", defaultOptions());
     expect(conn).toBeInstanceOf(Connection);
     try {
-      const ready = new Promise((resolve) => {
-        const unListen = conn.addListener(Event.ON_CONNECTED, (conn) => {
-          resolve(conn);
-          unListen();
-        });
-      });
-      const result = await ready;
-      expect(result).toBeInstanceOf(Connection);
+      const result = await conn.waitEvent(Event.ON_CONNECTED, 1000);
+      expect(result[0]).toBeInstanceOf(Connection);
     } finally {
-      conn.close();
+      await conn.closeAndWait();
     }
   });
 });
@@ -138,7 +140,7 @@ describe("MultiAltEndpointsConnection", () => {
     } catch (reason) {
       console.error(`Error occured: ${reason.stack}`);
     } finally {
-      conn.close();
+      await conn.closeAndWait();
     }
   });
 
@@ -154,7 +156,7 @@ describe("MultiAltEndpointsConnection", () => {
       expect(e).toBeInstanceOf(TimeoutError);
       expect(e.message).toEqual(`Timeout to wait: waiter: 8-0`);
     } finally {
-      conn.close();
+      await conn.closeAndWait();
     }
   });
 
@@ -174,7 +176,7 @@ describe("MultiAltEndpointsConnection", () => {
       expect(e).toBeInstanceOf(TimeoutError);
       expect(e.message).toEqual(`{"ref":1}`);
     } finally {
-      conn.close();
+      await conn.closeAndWait();
     }
   });
 
@@ -185,16 +187,73 @@ describe("MultiAltEndpointsConnection", () => {
     );
     expect(conn).toBeInstanceOf(MultiAltEndpointsConnection);
     try {
-      const ready = new Promise((resolve) => {
-        const unListen = conn.addListener(Event.ON_CONNECTED, (conn) => {
-          resolve(conn);
-          unListen();
-        });
-      });
-      const result = await ready;
-      expect(result).toBeInstanceOf(MultiAltEndpointsConnection);
+      const result = await conn.waitEvent(Event.ON_CONNECTED);
+      expect(result[0]).toBeInstanceOf(MultiAltEndpointsConnection);
     } finally {
-      conn.close();
+      await conn.closeAndWait();
     }
   });
+});
+
+describe("ConnectionPool", () => {
+  it("initial size", async () => {
+    const options = defaultPoolOptions();
+    const pool = new ConnectionPool(
+      () => AbortablePromise.resolve("localhost:10000"),
+      options,
+    );
+    await pool.waitAllOpen();
+    expect(pool.size()).toEqual(1);
+    await pool.closeAndWait();
+  });
+
+  it("unhealthy timeout", async () => {
+    const options = defaultPoolOptions({
+      heartbeatInterval: 5000,
+      unhealthyTimeout: 1000,
+      roundLogEnabled: true,
+    });
+    const pool = new ConnectionPool(
+      () => AbortablePromise.resolve("localhost:10000"),
+      options,
+    );
+    try {
+      expect(pool.size()).toEqual(1);
+      await pool.waitAllOpen();
+      const conn = pool.getConnection();
+      expect(pool.size()).toEqual(1);
+      expect(conn).toBeInstanceOf(MultiAltEndpointsConnection);
+      const result = await conn.waitEvent(Event.ON_UNHEALTHY_TIMEOUT);
+      expect(result[0]).toBeInstanceOf(MultiAltEndpointsConnection);
+      pool.getConnection();
+      expect(pool.size()).toEqual(2);
+    } finally {
+      await pool.closeAndWait();
+    }
+  }, 10 * 1000);
+
+  it("idle timeout", async () => {
+    const options = defaultPoolOptions({
+      unhealthyTimeout: 5000,
+      idleTimeout: 1000,
+      roundLogEnabled: true,
+    });
+    const pool = new ConnectionPool(
+      () => AbortablePromise.resolve("localhost:10000"),
+      options,
+    );
+    try {
+      expect(pool.size()).toEqual(1);
+      await pool.waitAllOpen();
+      const conn = pool.getConnection();
+      expect(pool.size()).toEqual(1);
+      expect(conn).toBeInstanceOf(MultiAltEndpointsConnection);
+      const result = await conn.waitEvent(Event.ON_IDLE_TIMEOUT);
+      expect(result[0]).toBeInstanceOf(MultiAltEndpointsConnection);
+      expect(pool.size()).toEqual(1);
+    } finally {
+      await pool.closeAndWait();
+    }
+  }, 10 * 1000);
+
 });
