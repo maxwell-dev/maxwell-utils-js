@@ -1,4 +1,4 @@
-export function now() {
+export function now(): number {
   return new Date().getTime();
 }
 

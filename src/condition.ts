@@ -67,7 +67,7 @@ export class Condition<T> {
     this._waiters = new Map();
   }
 
-  private _nextWaiterId() {
+  private _nextWaiterId(): number {
     return this._waiterId++;
   }
 }
