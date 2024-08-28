@@ -1,10 +1,12 @@
+import { AbortablePromise } from "@xuchaoqian/abortable-promise";
 type Event = any;
 type Result = any;
 type Callback = (...args: Result[]) => void;
-type UnListen = () => void;
+type Unlisten = () => void;
 export interface IListenable {
     addListener(event: Event, callback: Callback): void;
     deleteListener(event: Event, callback: Callback): void;
+    waitEvent(event: Event, timeout?: number): AbortablePromise<Result[]>;
     clear(): void;
     listeners(): Map<Event, Callback[]>;
     notify(event: Event, ...args: Result[]): void;
@@ -12,8 +14,9 @@ export interface IListenable {
 export declare class Listenable implements IListenable {
     private _listeners;
     constructor();
-    addListener(event: Event, callback: Callback): UnListen;
+    addListener(event: Event, callback: Callback): Unlisten;
     deleteListener(event: Event, callback: Callback): void;
+    waitEvent(event: Event, timeout?: number): AbortablePromise<Result[]>;
     clear(): void;
     listeners(): Map<Event, Callback[]>;
     notify(event: Event, ...args: Result[]): void;
