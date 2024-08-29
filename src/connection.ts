@@ -992,7 +992,7 @@ export class ConnectionPool
   ): void {
     if (connection.isClosed()) {
       console.debug(
-        `<${this.name()}>Connection was closed, dropping it: name: ${connection.name()},endpoint: ${connection.endpoint()}`,
+        `<${this.name()}>Connection was closed, will drop it: name: ${connection.name()},endpoint: ${connection.endpoint()}`,
       );
       this._dropConnection(connection);
     }
@@ -1003,10 +1003,6 @@ export class ConnectionPool
   }
 
   onCorrupted(connection: MultiAltEndpointsConnection, ...rest: any[]): void {
-    console.debug(
-      `<${this.name()}>Connection corrupted, dropping it: name: ${connection.name()}, endpoint: ${connection.endpoint()}`,
-    );
-    this._dropConnection(connection);
     tryWith(connection, () =>
       this._eventHandler.onCorrupted?.(connection, ...rest),
     );
@@ -1042,7 +1038,7 @@ export class ConnectionPool
 
   onBecameIdle(connection: MultiAltEndpointsConnection, ...rest: any[]): void {
     console.debug(
-      `<${this.name()}>Connection became idle, dropping it: name: ${connection.name()}, endpoint: ${connection.endpoint()}`,
+      `<${this.name()}>Connection became idle, will drop it: name: ${connection.name()}, endpoint: ${connection.endpoint()}`,
     );
     this._dropConnection(connection);
     tryWith(connection, () =>
