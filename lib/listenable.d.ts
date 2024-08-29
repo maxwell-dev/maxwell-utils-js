@@ -14,11 +14,11 @@ export interface IListenable {
 export declare class Listenable implements IListenable {
     private _listeners;
     constructor();
+    listeners(): Map<Event, Callback[]>;
     addListener(event: Event, callback: Callback): Unlisten;
     deleteListener(event: Event, callback: Callback): void;
     waitEvent(event: Event, timeout?: number): AbortablePromise<Result[]>;
     clear(): void;
-    listeners(): Map<Event, Callback[]>;
     notify(event: Event, ...args: Result[]): void;
 }
 export default Listenable;

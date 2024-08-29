@@ -1,5 +1,3 @@
-/* eslint-disable jest/valid-expect-in-promise */
-/* eslint-disable jest/no-conditional-expect */
 import { AbortablePromise, AbortError } from "@xuchaoqian/abortable-promise";
 import { msg_types } from "maxwell-protocol";
 import {
@@ -224,7 +222,7 @@ describe("ConnectionPool", () => {
         const conn = pool.getConnection();
         expect(pool.size()).toEqual(1);
         expect(conn).toBeInstanceOf(MultiAltEndpointsConnection);
-        const result = await conn.waitEvent(Event.ON_UNHEALTHY_TIMEOUT);
+        const result = await conn.waitEvent(Event.ON_BECAME_UNHEALTHY);
         expect(result[0]).toBeInstanceOf(MultiAltEndpointsConnection);
         pool.getConnection();
         expect(pool.size()).toEqual(2);
@@ -253,7 +251,7 @@ describe("ConnectionPool", () => {
         const conn = pool.getConnection();
         expect(pool.size()).toEqual(1);
         expect(conn).toBeInstanceOf(MultiAltEndpointsConnection);
-        const result = await conn.waitEvent(Event.ON_IDLE_TIMEOUT);
+        const result = await conn.waitEvent(Event.ON_BECAME_IDLE);
         expect(result[0]).toBeInstanceOf(MultiAltEndpointsConnection);
         expect(pool.size()).toEqual(1);
       } finally {

@@ -45,8 +45,10 @@ export enum Event {
   ON_DISCONNECTING = 102,
   ON_DISCONNECTED = 103,
   ON_CORRUPTED = 104,
-  ON_UNHEALTHY_TIMEOUT = 105,
-  ON_IDLE_TIMEOUT = 106,
+  ON_BECAME_UNHEALTHY = 105,
+  ON_BECAME_HEALTHY = 106,
+  ON_BECAME_IDLE = 107,
+  ON_BECAME_ACTIVE = 108,
 }
 
 export interface IEventHandler {
@@ -55,8 +57,10 @@ export interface IEventHandler {
   onDisconnecting?(connection: IConnection, ...rest: any[]): void;
   onDisconnected?(connection: IConnection, ...rest: any[]): void;
   onCorrupted?(connection: IConnection, ...rest: any[]): void;
-  onUnhealthyTimeout?(connection: IConnection, ...rest: any[]): void;
-  onIdleTimeout?(connection: IConnection, ...rest: any[]): void;
+  onBecameUnhealthy?(connection: IConnection, ...rest: any[]): void;
+  onBecameHealthy?(connection: IConnection, ...rest: any[]): void;
+  onBecameIdle?(connection: IConnection, ...rest: any[]): void;
+  onBecameActive?(connection: IConnection, ...rest: any[]): void;
 }
 
 export class DefaultEventHandler implements IEventHandler {}
@@ -70,11 +74,13 @@ export interface Identity {
 }
 
 export interface IConnection extends IListenable, Identity {
-  close(): void;
-  closeAndWait(): AbortablePromise<void>;
   endpoint(): string | undefined;
+  isHealthy(): boolean;
   isOpen(): boolean;
+  isClosed(): boolean;
   waitOpen(timeout?: number): AbortablePromise<IConnection>;
+  close(): void;
+  closeAndWait(): AbortablePromise<IConnection>;
   request(msg: ProtocolMsg, timeout?: number): AbortablePromise<ProtocolMsg>;
   send(msg: ProtocolMsg): void;
 }
@@ -101,16 +107,19 @@ export class Connection extends Listenable implements IConnection {
   private _options: Required<ConnectionOptions>;
   private _eventHandler: IEventHandler;
   private _shouldRun: boolean;
+  private _reconnectTimer: Timer | null;
   private _heartbeatTimer: Timer | null;
   private _checkStatusTimer: Timer | null;
-  private _reconnectTimer: Timer | null;
   private _sentAt: number;
   private _sendNonePingAt: number;
   private _receivedAt: number;
   private _isHealthy: boolean;
+  private _isIdle: boolean;
   private _lastRef: number;
   private _attachments: Map<number, Attachment>;
-  private _condition: Condition<Connection>;
+  private _openCondition: Condition<Connection>;
+  private _closedCondition: Condition<Connection>;
+  private _isDisconnected: boolean;
   private _websocket: typeof WebSocketImpl | null;
 
   //===========================================
@@ -126,52 +135,25 @@ export class Connection extends Listenable implements IConnection {
     this._options = options;
     this._eventHandler = eventHandler;
     this._shouldRun = true;
+    this._reconnectTimer = null;
     this._heartbeatTimer = null;
     this._checkStatusTimer = null;
-    this._reconnectTimer = null;
     this._sentAt = 0;
     this._sendNonePingAt = 0;
     this._receivedAt = 0;
     this._isHealthy = true;
+    this._isIdle = false;
     this._lastRef = 0;
     this._attachments = new Map();
-    this._condition = new Condition<Connection>(this, () => {
+    this._openCondition = new Condition<Connection>(this, () => {
       return this.isOpen();
     });
+    this._closedCondition = new Condition<Connection>(this, () => {
+      return this.isClosed();
+    });
+    this._isDisconnected = true;
     this._websocket = null;
     this._connect();
-  }
-
-  close(): void {
-    if (!this._shouldRun) {
-      return;
-    }
-    this._shouldRun = false;
-    this._condition.clear();
-    this._stopReconnect();
-    this._stopRepeatCheckStatus();
-    this._stopRepeatHeartbeat();
-    this._disconnect();
-    this._attachments.clear();
-  }
-
-  closeAndWait(): AbortablePromise<void> {
-    if (!this.isOpen()) {
-      this.close();
-      return AbortablePromise.resolve();
-    }
-    const closed = new AbortablePromise<void>((resolve) => {
-      const unlisten = this.addListener(Event.ON_DISCONNECTED, () => {
-        resolve();
-        unlisten();
-      });
-      const unlisten2 = this.addListener(Event.ON_CORRUPTED, () => {
-        resolve();
-        unlisten2();
-      });
-    });
-    this.close();
-    return closed;
   }
 
   id(): number {
@@ -190,12 +172,41 @@ export class Connection extends Listenable implements IConnection {
     return this._isHealthy;
   }
 
+  isIdle(): boolean {
+    return this._isIdle;
+  }
+
+  isClosed(): boolean {
+    return !this._shouldRun && this._isDisconnected;
+  }
+
   isOpen(): boolean {
     return this._websocket !== null && this._websocket.readyState === 1;
   }
 
   waitOpen(timeout?: number): AbortablePromise<Connection> {
-    return this._condition.wait(timeout);
+    return this._openCondition.wait(timeout);
+  }
+
+  close(): void {
+    if (!this._shouldRun) {
+      return;
+    }
+    this._shouldRun = false;
+    this._openCondition.clear();
+    this._stopReconnect();
+    this._stopRepeatCheckStatus();
+    this._stopRepeatHeartbeat();
+    this._disconnect();
+    this._attachments.clear();
+  }
+
+  closeAndWait(): AbortablePromise<Connection> {
+    this.close();
+    return this._closedCondition.wait().then(() => {
+      super.clear();
+      return this;
+    });
   }
 
   request(msg: ProtocolMsg, timeout?: number): AbortablePromise<ProtocolMsg> {
@@ -342,7 +353,8 @@ export class Connection extends Listenable implements IConnection {
     this._receivedAt = nowMs;
     this._repeatHeartbeat();
     this._repeatCheckStatus();
-    this._condition.notify();
+    this._isDisconnected = false;
+    this._openCondition.notify();
     tryWith(this, () => this._eventHandler.onConnected?.(this));
     this.notify(Event.ON_CONNECTED, this);
   }
@@ -353,6 +365,10 @@ export class Connection extends Listenable implements IConnection {
     );
     this._stopRepeatHeartbeat();
     this._stopRepeatCheckStatus();
+    this._isDisconnected = true;
+    if (!this._shouldRun) {
+      this._closedCondition.notify();
+    }
     tryWith(this, () => this._eventHandler.onDisconnected?.(this));
     this.notify(Event.ON_DISCONNECTED, this);
     this._reconnect();
@@ -484,26 +500,49 @@ export class Connection extends Listenable implements IConnection {
 
   private _checkUnhealthyTimeout(nowMs: number): void {
     if (this._hasReceivedBeforeUnhealthyTimeout(nowMs)) {
-      this._isHealthy = true;
+      if (!this._isHealthy) {
+        this._isHealthy = true;
+        console.info(
+          `<${this.name()}>Connection became healthy: endpoint: %s`,
+          this._endpoint,
+        );
+        tryWith(this, () => this._eventHandler.onBecameHealthy?.(this));
+        this.notify(Event.ON_BECAME_HEALTHY, this);
+      }
     } else {
-      this._isHealthy = false;
-      console.warn(
-        `<${this.name()}>Connection became unhealthy: endpoint: %s`,
-        this._endpoint,
-      );
-      tryWith(this, () => this._eventHandler.onUnhealthyTimeout?.(this));
-      this.notify(Event.ON_UNHEALTHY_TIMEOUT, this);
+      if (this._isHealthy) {
+        this._isHealthy = false;
+        console.info(
+          `<${this.name()}>Connection became unhealthy: endpoint: %s`,
+          this._endpoint,
+        );
+        tryWith(this, () => this._eventHandler.onBecameUnhealthy?.(this));
+        this.notify(Event.ON_BECAME_UNHEALTHY, this);
+      }
     }
   }
 
   private _checkIdleTimeout(nowMs: number): void {
-    if (!this._hasSentNonePingBeforeIdleTimeout(nowMs)) {
-      console.info(
-        `<${this.name()}>Connection became idle: endpoint: %s`,
-        this._endpoint,
-      );
-      tryWith(this, () => this._eventHandler.onIdleTimeout?.(this));
-      this.notify(Event.ON_IDLE_TIMEOUT, this);
+    if (this._hasSentNonePingBeforeIdleTimeout(nowMs)) {
+      if (this._isIdle) {
+        this._isIdle = false;
+        console.info(
+          `<${this.name()}>Connection became active: endpoint: %s`,
+          this._endpoint,
+        );
+        tryWith(this, () => this._eventHandler.onBecameActive?.(this));
+        this.notify(Event.ON_BECAME_ACTIVE, this);
+      }
+    } else {
+      if (!this._isIdle) {
+        this._isIdle = true;
+        console.info(
+          `<${this.name()}>Connection became idle: endpoint: %s`,
+          this._endpoint,
+        );
+        tryWith(this, () => this._eventHandler.onBecameIdle?.(this));
+        this.notify(Event.ON_BECAME_IDLE, this);
+      }
     }
   }
 
@@ -558,7 +597,9 @@ export class MultiAltEndpointsConnection
   private _shouldRun: boolean;
   private _connectTask: AbortablePromise<void> | null;
   private _reconnectTimer: Timer | null;
-  private _condition: Condition<MultiAltEndpointsConnection>;
+  private _openCondition: Condition<MultiAltEndpointsConnection>;
+  private _closedCondition: Condition<MultiAltEndpointsConnection>;
+  private _isDisconnected: boolean;
   private _connection: Connection | null;
 
   //===========================================
@@ -577,41 +618,21 @@ export class MultiAltEndpointsConnection
     this._shouldRun = true;
     this._connectTask = null;
     this._reconnectTimer = null;
-    this._condition = new Condition<MultiAltEndpointsConnection>(this, () => {
-      return this.isOpen();
-    });
+    this._openCondition = new Condition<MultiAltEndpointsConnection>(
+      this,
+      () => {
+        return this.isOpen();
+      },
+    );
+    this._closedCondition = new Condition<MultiAltEndpointsConnection>(
+      this,
+      () => {
+        return this.isClosed();
+      },
+    );
+    this._isDisconnected = true;
     this._connection = null;
     this._connect();
-  }
-
-  close(): void {
-    if (!this._shouldRun) {
-      return;
-    }
-    this._shouldRun = false;
-    this._stopReconnect();
-    this._connectTask?.abort();
-    this._condition.clear();
-    this._connection?.close();
-  }
-
-  closeAndWait(): AbortablePromise<void> {
-    if (!this.isOpen()) {
-      this.close();
-      return AbortablePromise.resolve();
-    }
-    const closed = new AbortablePromise<void>((resolve) => {
-      const unlisten = this.addListener(Event.ON_DISCONNECTED, () => {
-        resolve();
-        unlisten();
-      });
-      const unlisten2 = this.addListener(Event.ON_CORRUPTED, () => {
-        resolve();
-        unlisten2();
-      });
-    });
-    this.close();
-    return closed;
   }
 
   id(): number {
@@ -635,7 +656,32 @@ export class MultiAltEndpointsConnection
   }
 
   waitOpen(timeout?: number): AbortablePromise<MultiAltEndpointsConnection> {
-    return this._condition.wait(timeout);
+    return this._openCondition.wait(timeout);
+  }
+
+  isClosed(): boolean {
+    return !this._shouldRun && this._isDisconnected;
+  }
+
+  close(): void {
+    if (!this._shouldRun) {
+      return;
+    }
+    this._shouldRun = false;
+    this._stopReconnect();
+    this._connectTask?.abort();
+    this._openCondition.clear();
+    this._connection?.close();
+  }
+
+  closeAndWait(
+    timeout?: number,
+  ): AbortablePromise<MultiAltEndpointsConnection> {
+    this.close();
+    return this._closedCondition.wait(timeout).then(() => {
+      super.clear();
+      return this;
+    });
   }
 
   request(
@@ -669,7 +715,8 @@ export class MultiAltEndpointsConnection
   }
 
   onConnected(connection: Connection, ...rest: any[]): void {
-    this._condition.notify();
+    this._isDisconnected = false;
+    this._openCondition.notify();
     tryWith(this, () =>
       this._eventHandler.onConnected?.(this, connection, ...rest),
     );
@@ -684,6 +731,10 @@ export class MultiAltEndpointsConnection
   }
 
   onDisconnected(connection: Connection, ...rest: any[]): void {
+    this._isDisconnected = true;
+    if (!this._shouldRun) {
+      this._closedCondition.notify();
+    }
     tryWith(this, () =>
       this._eventHandler.onDisconnected?.(this, connection, ...rest),
     );
@@ -698,18 +749,32 @@ export class MultiAltEndpointsConnection
     this.notify(Event.ON_CORRUPTED, this, connection, ...rest);
   }
 
-  onUnhealthyTimeout(connection: Connection, ...rest: any[]): void {
+  onBecameUnhealthy(connection: Connection, ...rest: any[]): void {
     tryWith(this, () =>
-      this._eventHandler.onUnhealthyTimeout?.(this, connection, ...rest),
+      this._eventHandler.onBecameUnhealthy?.(this, connection, ...rest),
     );
-    this.notify(Event.ON_UNHEALTHY_TIMEOUT, this, connection, ...rest);
+    this.notify(Event.ON_BECAME_UNHEALTHY, this, connection, ...rest);
   }
 
-  onIdleTimeout(connection: Connection, ...rest: any[]): void {
+  onBecameHealthy(connection: IConnection, ...rest: any[]): void {
     tryWith(this, () =>
-      this._eventHandler.onIdleTimeout?.(this, connection, ...rest),
+      this._eventHandler.onBecameHealthy?.(this, connection, ...rest),
     );
-    this.notify(Event.ON_IDLE_TIMEOUT, this, connection, ...rest);
+    this.notify(Event.ON_BECAME_HEALTHY, this, connection, ...rest);
+  }
+
+  onBecameActive(connection: Connection, ...rest: any[]): void {
+    tryWith(this, () =>
+      this._eventHandler.onBecameActive?.(this, connection, ...rest),
+    );
+    this.notify(Event.ON_BECAME_ACTIVE, this, connection, ...rest);
+  }
+
+  onBecameIdle(connection: Connection, ...rest: any[]): void {
+    tryWith(this, () =>
+      this._eventHandler.onBecameIdle?.(this, connection, ...rest),
+    );
+    this.notify(Event.ON_BECAME_IDLE, this, connection, ...rest);
   }
 
   //===========================================
@@ -775,8 +840,11 @@ export class ConnectionPool
   private _pickEndpoint: PickEndpoint;
   private _options: Required<ConnectionPoolOptions>;
   private _eventHandler: IEventHandler;
-  private _connections: MultiAltEndpointsConnection[];
-  private _indexSeed: number;
+  private _shouldRun: boolean;
+  private _allConnections: MultiAltEndpointsConnection[];
+  private _healthyConnections: MultiAltEndpointsConnection[];
+  private _closingConnections: Map<number, MultiAltEndpointsConnection>;
+  private _healthyIndexSeed: number;
 
   //===========================================
   // APIs
@@ -791,26 +859,15 @@ export class ConnectionPool
     this._pickEndpoint = pickEndpoint;
     this._options = options;
     this._eventHandler = eventHandler;
-    this._connections = [];
-    this._indexSeed = 0;
+    this._shouldRun = true;
+    this._allConnections = [];
+    this._healthyConnections = [];
+    this._closingConnections = new Map<number, MultiAltEndpointsConnection>();
+    this._healthyIndexSeed = 0;
 
     for (let i = 0; i < this._options.minPoolSize; i++) {
-      this._connections.push(this._createConnection());
+      this._addFreshConnection(this._createConnection());
     }
-  }
-
-  close(): void {
-    for (const connection of this._connections) {
-      connection.close();
-    }
-    this._connections = [];
-  }
-
-  closeAndWait(): AbortablePromise<void> {
-    const promises = this._connections.map((connection) =>
-      connection.closeAndWait(),
-    );
-    return AbortablePromise.all(promises).then(() => {});
   }
 
   id(): number {
@@ -822,37 +879,66 @@ export class ConnectionPool
   }
 
   size(): number {
-    return this._connections.length;
+    return this._allConnections.length;
   }
 
   waitAllOpen(timeout?: number): AbortablePromise<ConnectionPool> {
-    const promises = this._connections.map((connection) =>
+    const promises = this._allConnections.map((connection) =>
       connection.waitOpen(timeout),
     );
     return AbortablePromise.all(promises).then(() => this);
   }
 
-  getConnection(): MultiAltEndpointsConnection {
-    const index = this._nextIndex();
-    const len = this._connections.length;
-    for (let i = index; i < len; i++) {
-      if (this._connections[i].isHealthy()) {
-        return this._connections[i];
-      }
+  close(): void {
+    if (!this._shouldRun) {
+      return;
     }
-    for (let i = 0; i < index; i++) {
-      if (this._connections[i].isHealthy()) {
-        return this._connections[i];
-      }
+    this._shouldRun = false;
+    for (const connection of this._allConnections) {
+      connection.close();
+    }
+    this._allConnections = [];
+    this._healthyConnections = [];
+    this._closingConnections.clear();
+  }
+
+  closeAndWait(timeout?: number): AbortablePromise<ConnectionPool> {
+    if (!this._shouldRun) {
+      return AbortablePromise.resolve(this);
+    }
+    this._shouldRun = false;
+
+    for (const connection of this._allConnections) {
+      this._closingConnections.set(connection.id(), connection);
+    }
+    const promises = [];
+    for (const connection of this._closingConnections.values()) {
+      promises.push(connection.closeAndWait(timeout));
+    }
+    return AbortablePromise.all(promises).then(() => {
+      this._allConnections = [];
+      this._healthyConnections = [];
+      this._closingConnections.clear();
+      super.clear();
+      return this;
+    });
+  }
+
+  getConnection(): MultiAltEndpointsConnection {
+    if (this._healthyConnections.length > 0) {
+      return this._healthyConnections[this._nextHealthyIndex()];
     }
 
-    if (len < this._options.maxPoolSize) {
+    if (this._allConnections.length < this._options.maxPoolSize) {
       const connection = this._createConnection();
-      this._connections.push(connection);
+      this._addFreshConnection(connection);
       return connection;
     }
 
-    return this._connections[index];
+    // If no healthy connections and at max size, return any connection
+    return this._allConnections[
+      Math.floor(Math.random() * this._allConnections.length)
+    ];
   }
 
   //===========================================
@@ -887,6 +973,9 @@ export class ConnectionPool
     connection: MultiAltEndpointsConnection,
     ...rest: any[]
   ): void {
+    if (connection.isClosed()) {
+      this._dropConnection(connection);
+    }
     tryWith(connection, () =>
       this._eventHandler.onDisconnected?.(connection, ...rest),
     );
@@ -894,29 +983,50 @@ export class ConnectionPool
   }
 
   onCorrupted(connection: MultiAltEndpointsConnection, ...rest: any[]): void {
-    this._tryDropConnection(connection as MultiAltEndpointsConnection);
+    this._dropConnection(connection);
     tryWith(connection, () =>
       this._eventHandler.onCorrupted?.(connection, ...rest),
     );
     this.notify(Event.ON_CORRUPTED, connection, ...rest);
   }
 
-  onUnhealthyTimeout(
+  onBecameUnhealthy(
+    connection: MultiAltEndpointsConnection,
+    ...rest: any[]
+  ): void {
+    this._updateConnectionHealth(connection);
+    tryWith(connection, () =>
+      this._eventHandler.onBecameUnhealthy?.(connection, ...rest),
+    );
+    this.notify(Event.ON_BECAME_UNHEALTHY, connection, ...rest);
+  }
+
+  onBecameHealthy(
+    connection: MultiAltEndpointsConnection,
+    ...rest: any[]
+  ): void {
+    this._updateConnectionHealth(connection);
+    tryWith(connection, () =>
+      this._eventHandler.onBecameHealthy?.(connection, ...rest),
+    );
+  }
+
+  onBecameIdle(connection: MultiAltEndpointsConnection, ...rest: any[]): void {
+    this._dropConnection(connection);
+    tryWith(connection, () =>
+      this._eventHandler.onBecameIdle?.(connection, ...rest),
+    );
+    this.notify(Event.ON_BECAME_IDLE, connection, ...rest);
+  }
+
+  onBecameActive(
     connection: MultiAltEndpointsConnection,
     ...rest: any[]
   ): void {
     tryWith(connection, () =>
-      this._eventHandler.onUnhealthyTimeout?.(connection, ...rest),
+      this._eventHandler.onBecameActive?.(connection, ...rest),
     );
-    this.notify(Event.ON_UNHEALTHY_TIMEOUT, connection, ...rest);
-  }
-
-  onIdleTimeout(connection: MultiAltEndpointsConnection, ...rest: any[]): void {
-    this._tryDropConnection(connection as MultiAltEndpointsConnection);
-    tryWith(connection, () =>
-      this._eventHandler.onIdleTimeout?.(connection, ...rest),
-    );
-    this.notify(Event.ON_IDLE_TIMEOUT, connection, ...rest);
+    this.notify(Event.ON_BECAME_ACTIVE, connection, ...rest);
   }
 
   //===========================================
@@ -931,33 +1041,66 @@ export class ConnectionPool
     );
   }
 
-  private _tryDropConnection(connection: MultiAltEndpointsConnection): void {
-    const oldPoolSize = this._connections.length;
-    const minPoolSize = this._options.minPoolSize;
-    if (oldPoolSize <= minPoolSize) {
-      console.info(
-        `<${this.name()}>No need to drop connection, since the pool size is already at min size: ${minPoolSize}`,
-      );
-      return;
-    }
-    const index = this._connections.indexOf(connection);
-    if (index > -1) {
-      this._connections.splice(index, 1);
-    }
-
-    const newPoolSize = this._connections.length;
-    console.info(
-      `<${this.name()}>Dropping connection: name: ${connection.name()}, old pool size: ${oldPoolSize}, new pool size: ${newPoolSize}, endpoint: ${connection.endpoint()}`,
-    );
-    connection.close();
+  private _addFreshConnection(connection: MultiAltEndpointsConnection): void {
+    this._allConnections.push(connection);
+    this._healthyConnections.push(connection);
   }
 
-  private _nextIndex(): number {
-    if (this._indexSeed >= this._connections.length - 1) {
-      this._indexSeed = 0;
-    } else {
-      ++this._indexSeed;
+  private _updateConnectionHealth(
+    connection: MultiAltEndpointsConnection,
+  ): void {
+    const isHealthy = connection.isHealthy();
+    const healthyIndex = this._healthyConnections.indexOf(connection);
+
+    if (isHealthy && healthyIndex === -1) {
+      this._healthyConnections.push(connection);
+    } else if (!isHealthy && healthyIndex !== -1) {
+      this._healthyConnections.splice(healthyIndex, 1);
     }
-    return this._indexSeed;
+  }
+
+  private _dropConnection(connection: MultiAltEndpointsConnection): void {
+    if (!this._shouldRun) {
+      return;
+    }
+
+    if (this._closingConnections.has(connection.id())) {
+      return;
+    }
+    this._closingConnections.set(connection.id(), connection);
+
+    const allIndex = this._allConnections.indexOf(connection);
+    if (allIndex > -1) {
+      this._allConnections.splice(allIndex, 1);
+    }
+
+    const healthyIndex = this._healthyConnections.indexOf(connection);
+    if (healthyIndex > -1) {
+      this._healthyConnections.splice(healthyIndex, 1);
+    }
+
+    console.info(
+      `<${this.name()}>Dropping connection: name: ${connection.name()}, old pool size: ${this._allConnections.length + 1}, new pool size: ${this._allConnections.length}, endpoint: ${connection.endpoint()}`,
+    );
+    connection.close();
+
+    const minPoolSize = this._options.minPoolSize;
+    if (this._allConnections.length < minPoolSize) {
+      console.info(
+        `<${this.name()}>Creating connections, since the pool size(${this._allConnections.length}) is less than min pool size(${minPoolSize}).`,
+      );
+      for (let i = 0; i < minPoolSize - this._allConnections.length; i++) {
+        this._addFreshConnection(this._createConnection());
+      }
+    }
+  }
+
+  private _nextHealthyIndex(): number {
+    if (this._healthyIndexSeed >= this._healthyConnections.length - 1) {
+      this._healthyIndexSeed = 0;
+    } else {
+      ++this._healthyIndexSeed;
+    }
+    return this._healthyIndexSeed;
   }
 }

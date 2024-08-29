@@ -24,6 +24,10 @@ export class Listenable implements IListenable {
     this._listeners = new Map();
   }
 
+  listeners(): Map<Event, Callback[]> {
+    return this._listeners;
+  }
+
   addListener(event: Event, callback: Callback): Unlisten {
     let callbacks = this._listeners.get(event);
     if (typeof callbacks === "undefined") {
@@ -87,10 +91,6 @@ export class Listenable implements IListenable {
 
   clear(): void {
     this._listeners.clear();
-  }
-
-  listeners(): Map<Event, Callback[]> {
-    return this._listeners;
   }
 
   notify(event: Event, ...args: Result[]): void {
