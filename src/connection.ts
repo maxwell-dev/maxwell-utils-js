@@ -88,6 +88,12 @@ export interface IConnection extends IListenable, Identity {
 // [resolve, reject]
 type Attachment = [(value: ProtocolMsg) => void, (reason?: Error) => void];
 
+enum ReadyState {
+  CONNECTING = 0,
+  OPEN = 1,
+  CLOSED = 3,
+}
+
 function tryWith(identity: Identity, callback: () => void) {
   try {
     callback();
@@ -119,9 +125,8 @@ export class Connection extends Listenable implements IConnection {
   private _attachments: Map<number, Attachment>;
   private _openCondition: Condition<Connection>;
   private _closedCondition: Condition<Connection>;
-  private _isDisconnected: boolean;
+  private _readyState: ReadyState;
   private _websocket: typeof WebSocketImpl | null;
-
   //===========================================
   // APIs
   //===========================================
@@ -151,7 +156,7 @@ export class Connection extends Listenable implements IConnection {
     this._closedCondition = new Condition<Connection>(this, () => {
       return this.isClosed();
     });
-    this._isDisconnected = true;
+    this._readyState = ReadyState.CONNECTING;
     this._websocket = null;
     this._connect();
   }
@@ -176,12 +181,14 @@ export class Connection extends Listenable implements IConnection {
     return this._isIdle;
   }
 
-  isClosed(): boolean {
-    return !this._shouldRun && this._isDisconnected;
+  isOpen(): boolean {
+    return (
+      this._websocket !== null && this._websocket.readyState === ReadyState.OPEN
+    );
   }
 
-  isOpen(): boolean {
-    return this._websocket !== null && this._websocket.readyState === 1;
+  isClosed(): boolean {
+    return !this._shouldRun && this._readyState === ReadyState.CLOSED;
   }
 
   waitOpen(timeout?: number): AbortablePromise<Connection> {
@@ -353,7 +360,7 @@ export class Connection extends Listenable implements IConnection {
     this._receivedAt = nowMs;
     this._repeatHeartbeat();
     this._repeatCheckStatus();
-    this._isDisconnected = false;
+    this._readyState = ReadyState.OPEN;
     this._openCondition.notify();
     tryWith(this, () => this._eventHandler.onConnected?.(this));
     this.notify(Event.ON_CONNECTED, this);
@@ -365,7 +372,7 @@ export class Connection extends Listenable implements IConnection {
     );
     this._stopRepeatHeartbeat();
     this._stopRepeatCheckStatus();
-    this._isDisconnected = true;
+    this._readyState = ReadyState.CLOSED;
     if (!this._shouldRun) {
       this._closedCondition.notify();
     }
@@ -599,7 +606,7 @@ export class MultiAltEndpointsConnection
   private _reconnectTimer: Timer | null;
   private _openCondition: Condition<MultiAltEndpointsConnection>;
   private _closedCondition: Condition<MultiAltEndpointsConnection>;
-  private _isDisconnected: boolean;
+  private _readyState: ReadyState;
   private _connection: Connection | null;
 
   //===========================================
@@ -630,7 +637,7 @@ export class MultiAltEndpointsConnection
         return this.isClosed();
       },
     );
-    this._isDisconnected = true;
+    this._readyState = ReadyState.CONNECTING;
     this._connection = null;
     this._connect();
   }
@@ -660,7 +667,7 @@ export class MultiAltEndpointsConnection
   }
 
   isClosed(): boolean {
-    return !this._shouldRun && this._isDisconnected;
+    return !this._shouldRun && this._readyState === ReadyState.CLOSED;
   }
 
   close(): void {
@@ -708,6 +715,9 @@ export class MultiAltEndpointsConnection
   //===========================================
 
   onConnecting(connection: Connection, ...rest: any[]): void {
+    console.debug(
+      `<${this.name()}>Connecting: endpoint: ${connection.endpoint()}`,
+    );
     tryWith(this, () =>
       this._eventHandler.onConnecting?.(this, connection, ...rest),
     );
@@ -715,7 +725,10 @@ export class MultiAltEndpointsConnection
   }
 
   onConnected(connection: Connection, ...rest: any[]): void {
-    this._isDisconnected = false;
+    console.debug(
+      `<${this.name()}>Connection connected: endpoint: ${connection.endpoint()}`,
+    );
+    this._readyState = ReadyState.OPEN;
     this._openCondition.notify();
     tryWith(this, () =>
       this._eventHandler.onConnected?.(this, connection, ...rest),
@@ -724,6 +737,9 @@ export class MultiAltEndpointsConnection
   }
 
   onDisconnecting(connection: Connection, ...rest: any[]): void {
+    console.debug(
+      `<${this.name()}>Disconnecting: endpoint: ${connection.endpoint()}`,
+    );
     tryWith(this, () =>
       this._eventHandler.onDisconnecting?.(this, connection, ...rest),
     );
@@ -731,7 +747,10 @@ export class MultiAltEndpointsConnection
   }
 
   onDisconnected(connection: Connection, ...rest: any[]): void {
-    this._isDisconnected = true;
+    console.debug(
+      `<${this.name()}>Connection disconnected: endpoint: ${connection.endpoint()}`,
+    );
+    this._readyState = ReadyState.CLOSED;
     if (!this._shouldRun) {
       this._closedCondition.notify();
     }
@@ -743,6 +762,9 @@ export class MultiAltEndpointsConnection
   }
 
   onCorrupted(connection: Connection, ...rest: any[]): void {
+    console.debug(
+      `<${this.name()}>Connection corrupted: endpoint: ${connection.endpoint()}`,
+    );
     tryWith(this, () =>
       this._eventHandler.onCorrupted?.(this, connection, ...rest),
     );
@@ -750,6 +772,9 @@ export class MultiAltEndpointsConnection
   }
 
   onBecameUnhealthy(connection: Connection, ...rest: any[]): void {
+    console.debug(
+      `<${this.name()}>Connection became unhealthy: endpoint: ${connection.endpoint()}`,
+    );
     tryWith(this, () =>
       this._eventHandler.onBecameUnhealthy?.(this, connection, ...rest),
     );
@@ -757,6 +782,9 @@ export class MultiAltEndpointsConnection
   }
 
   onBecameHealthy(connection: IConnection, ...rest: any[]): void {
+    console.debug(
+      `<${this.name()}>Connection became healthy: endpoint: ${connection.endpoint()}`,
+    );
     tryWith(this, () =>
       this._eventHandler.onBecameHealthy?.(this, connection, ...rest),
     );
@@ -764,6 +792,9 @@ export class MultiAltEndpointsConnection
   }
 
   onBecameActive(connection: Connection, ...rest: any[]): void {
+    console.debug(
+      `<${this.name()}>Connection became active: endpoint: ${connection.endpoint()}`,
+    );
     tryWith(this, () =>
       this._eventHandler.onBecameActive?.(this, connection, ...rest),
     );
@@ -771,6 +802,9 @@ export class MultiAltEndpointsConnection
   }
 
   onBecameIdle(connection: Connection, ...rest: any[]): void {
+    console.debug(
+      `<${this.name()}>Connection became idle: endpoint: ${connection.endpoint()}`,
+    );
     tryWith(this, () =>
       this._eventHandler.onBecameIdle?.(this, connection, ...rest),
     );
@@ -793,6 +827,10 @@ export class MultiAltEndpointsConnection
         console.error(
           `<${this.name()}>Failed to pick endpoint: reason: ${reason}`,
         );
+        this._readyState = ReadyState.CLOSED;
+        if (!this._shouldRun) {
+          this._closedCondition.notify();
+        }
         this._reconnect();
       });
   }
@@ -827,7 +865,7 @@ export function makeConnectionPoolOptions(
   }
   return {
     minPoolSize: options.minPoolSize ?? 1,
-    maxPoolSize: options.maxPoolSize ?? 5,
+    maxPoolSize: options.maxPoolSize ?? 3,
     ...makeConnectionOptions(options),
   };
 }
@@ -946,6 +984,9 @@ export class ConnectionPool
   //===========================================
 
   onConnecting(connection: MultiAltEndpointsConnection, ...rest: any[]): void {
+    console.debug(
+      `<${this.name()}>Connecting: name: ${connection.name()}, endpoint: ${connection.endpoint()}`,
+    );
     tryWith(connection, () =>
       this._eventHandler.onConnecting?.(connection, ...rest),
     );
@@ -953,6 +994,9 @@ export class ConnectionPool
   }
 
   onConnected(connection: MultiAltEndpointsConnection, ...rest: any[]): void {
+    console.debug(
+      `<${this.name()}>Connection connected: name: ${connection.name()}, endpoint: ${connection.endpoint()}`,
+    );
     tryWith(connection, () =>
       this._eventHandler.onConnected?.(connection, ...rest),
     );
@@ -963,6 +1007,9 @@ export class ConnectionPool
     connection: MultiAltEndpointsConnection,
     ...rest: any[]
   ): void {
+    console.debug(
+      `<${this.name()}>Disconnecting: name: ${connection.name()}, endpoint: ${connection.endpoint()}`,
+    );
     tryWith(connection, () =>
       this._eventHandler.onDisconnecting?.(connection, ...rest),
     );
@@ -973,6 +1020,9 @@ export class ConnectionPool
     connection: MultiAltEndpointsConnection,
     ...rest: any[]
   ): void {
+    console.debug(
+      `<${this.name()}>Connection disconnected: name: ${connection.name()}, endpoint: ${connection.endpoint()}`,
+    );
     if (connection.isClosed()) {
       this._dropConnection(connection);
     }
@@ -983,6 +1033,9 @@ export class ConnectionPool
   }
 
   onCorrupted(connection: MultiAltEndpointsConnection, ...rest: any[]): void {
+    console.debug(
+      `<${this.name()}>Connection corrupted: name: ${connection.name()}, endpoint: ${connection.endpoint()}`,
+    );
     this._dropConnection(connection);
     tryWith(connection, () =>
       this._eventHandler.onCorrupted?.(connection, ...rest),
@@ -994,6 +1047,9 @@ export class ConnectionPool
     connection: MultiAltEndpointsConnection,
     ...rest: any[]
   ): void {
+    console.debug(
+      `<${this.name()}>Connection became unhealthy: name: ${connection.name()}, endpoint: ${connection.endpoint()}`,
+    );
     this._updateConnectionHealth(connection);
     tryWith(connection, () =>
       this._eventHandler.onBecameUnhealthy?.(connection, ...rest),
@@ -1005,6 +1061,9 @@ export class ConnectionPool
     connection: MultiAltEndpointsConnection,
     ...rest: any[]
   ): void {
+    console.debug(
+      `<${this.name()}>Connection became healthy: name: ${connection.name()}, endpoint: ${connection.endpoint()}`,
+    );
     this._updateConnectionHealth(connection);
     tryWith(connection, () =>
       this._eventHandler.onBecameHealthy?.(connection, ...rest),
@@ -1012,6 +1071,9 @@ export class ConnectionPool
   }
 
   onBecameIdle(connection: MultiAltEndpointsConnection, ...rest: any[]): void {
+    console.debug(
+      `<${this.name()}>Connection became idle: name: ${connection.name()}, endpoint: ${connection.endpoint()}`,
+    );
     this._dropConnection(connection);
     tryWith(connection, () =>
       this._eventHandler.onBecameIdle?.(connection, ...rest),
@@ -1023,6 +1085,9 @@ export class ConnectionPool
     connection: MultiAltEndpointsConnection,
     ...rest: any[]
   ): void {
+    console.debug(
+      `<${this.name()}>Connection became active: name: ${connection.name()}, endpoint: ${connection.endpoint()}`,
+    );
     tryWith(connection, () =>
       this._eventHandler.onBecameActive?.(connection, ...rest),
     );
@@ -1064,25 +1129,37 @@ export class ConnectionPool
       return;
     }
 
-    if (this._closingConnections.has(connection.id())) {
-      return;
-    }
-    this._closingConnections.set(connection.id(), connection);
+    console.debug(
+      `<${this.name()}>Dropping connection: name: ${connection.name()}, endpoint: ${connection.endpoint()}`,
+    );
 
+    const oldPoolSize = this._allConnections.length;
     const allIndex = this._allConnections.indexOf(connection);
     if (allIndex > -1) {
       this._allConnections.splice(allIndex, 1);
     }
-
     const healthyIndex = this._healthyConnections.indexOf(connection);
     if (healthyIndex > -1) {
       this._healthyConnections.splice(healthyIndex, 1);
     }
 
-    console.info(
-      `<${this.name()}>Dropping connection: name: ${connection.name()}, old pool size: ${this._allConnections.length + 1}, new pool size: ${this._allConnections.length}, endpoint: ${connection.endpoint()}`,
-    );
-    connection.close();
+    const newPoolSize = this._allConnections.length;
+    if (newPoolSize < oldPoolSize) {
+      console.info(
+        `<${this.name()}>Connection removed from pool: old pool size: ${oldPoolSize}, new pool size: ${newPoolSize}, name: ${connection.name()}, endpoint: ${connection.endpoint()}`,
+      );
+    } else {
+      console.debug(
+        `<${this.name()}>No such connection in pool, maybe already removed: name: ${connection.name()}, endpoint: ${connection.endpoint()}`,
+      );
+    }
+
+    if (connection.isClosed()) {
+      this._closingConnections.delete(connection.id());
+    } else {
+      this._closingConnections.set(connection.id(), connection);
+      connection.close();
+    }
 
     const minPoolSize = this._options.minPoolSize;
     if (this._allConnections.length < minPoolSize) {

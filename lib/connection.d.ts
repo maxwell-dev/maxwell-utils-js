@@ -68,7 +68,7 @@ export declare class Connection extends Listenable implements IConnection {
     private _attachments;
     private _openCondition;
     private _closedCondition;
-    private _isDisconnected;
+    private _readyState;
     private _websocket;
     constructor(endpoint: string, options: Required<ConnectionOptions>, eventHandler?: IEventHandler);
     id(): number;
@@ -76,8 +76,8 @@ export declare class Connection extends Listenable implements IConnection {
     endpoint(): string;
     isHealthy(): boolean;
     isIdle(): boolean;
-    isClosed(): boolean;
     isOpen(): boolean;
+    isClosed(): boolean;
     waitOpen(timeout?: number): AbortablePromise<Connection>;
     close(): void;
     closeAndWait(): AbortablePromise<Connection>;
@@ -120,7 +120,7 @@ export declare class MultiAltEndpointsConnection extends Listenable implements I
     private _reconnectTimer;
     private _openCondition;
     private _closedCondition;
-    private _isDisconnected;
+    private _readyState;
     private _connection;
     constructor(pickEndpoint: PickEndpoint, options: Required<ConnectionOptions>, eventHandler?: IEventHandler);
     id(): number;
