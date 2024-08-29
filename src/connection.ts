@@ -452,7 +452,6 @@ export class Connection extends Listenable implements IConnection {
     const nowMs = now();
     let duration = this._calcDelayForNextHeartbeat(nowMs);
     if (duration <= 1000) {
-      console.debug(`<${this.name()}>Sending heartbeat`);
       // Send heartbeat immediately if the delay less than 1s,
       // Here use 1s but not 0s to avoid busy loop.
       this._sendHeartbeat();
@@ -493,7 +492,6 @@ export class Connection extends Listenable implements IConnection {
     }
     this._stopRepeatCheckStatus();
     this._checkStatusTimer = setInterval(() => {
-      console.debug(`<${this.name()}>check status`);
       const nowMs = now();
       this._checkUnhealthyTimeout(nowMs);
       this._checkIdleTimeout(nowMs);
@@ -565,7 +563,7 @@ export class Connection extends Listenable implements IConnection {
 
   private _calcIntervalForCheckStatus(): number {
     return Math.floor(
-      Math.min(this._options.heartbeatInterval, this._options.idleTimeout) / 2,
+      Math.min(this._options.unhealthyTimeout, this._options.idleTimeout) / 2,
     );
   }
 
