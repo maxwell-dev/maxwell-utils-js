@@ -1,4 +1,4 @@
-import { AbortablePromise } from "@xuchaoqian/abortable-promise";
+import { AbortablePromise, AbortError } from "@xuchaoqian/abortable-promise";
 import { msg_types, encode_msg, decode_msg } from "maxwell-protocol";
 import {
   Timer,
@@ -245,7 +245,7 @@ export class Connection extends Listenable implements IConnection {
     try {
       this.send(msg);
     } catch (reason: any) {
-      promise.abort(reason);
+      promise.abort(new AbortError(reason));
     }
 
     return promise;
@@ -676,7 +676,7 @@ export class MultiAltEndpointsConnection
     }
     this._shouldRun = false;
     this._stopReconnect();
-    this._connectTask?.abort();
+    this._connectTask?.abort(new AbortError());
     this._openCondition.clear();
     this._connection?.close();
   }
