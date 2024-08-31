@@ -21,7 +21,7 @@ describe("Connection", () => {
         payload: JSON.stringify({}),
         header: {},
       });
-      const request = conn.request(req, 1000);
+      const request = conn.request(req, { timeout: 1000 });
       expect(request).toBeInstanceOf(AbortablePromise);
       const result = await request;
       expect(JSON.parse(result.payload)).toEqual("world");
@@ -42,7 +42,7 @@ describe("Connection", () => {
         payload: JSON.stringify({}),
         header: {},
       });
-      const request = conn.request(req, 1000);
+      const request = conn.request(req, { timeout: 1000 });
       expect(request).toBeInstanceOf(AbortablePromise);
       await request;
     } catch (e) {
@@ -74,12 +74,35 @@ describe("Connection", () => {
     try {
       await conn.waitOpen();
       const req = new msg_types.ping_req_t({});
-      const request = conn.request(req, 1000);
+      const request = conn.request(req, { timeout: 1000 });
       expect(request).toBeInstanceOf(AbortablePromise);
       await request;
     } catch (e) {
       expect(e).toBeInstanceOf(TimeoutError);
       expect(e.message).toEqual(`{"ref":1}`);
+    } finally {
+      await conn.closeAndWait();
+    }
+  });
+
+  it("abort request", async () => {
+    const conn = new Connection("localhost:10000", makeConnectionOptions());
+    expect(conn).toBeInstanceOf(Connection);
+    try {
+      await conn.waitOpen();
+      const req = new msg_types.ping_req_t({});
+      const request = conn.request(req, {
+        timeout: 5000,
+      });
+      expect(request).toBeInstanceOf(AbortablePromise);
+      setTimeout(() => {
+        request.abort();
+      }, 1000);
+      await request;
+    } catch (e) {
+      expect(e).toBeInstanceOf(DOMException);
+      expect(e.name).toEqual("AbortError");
+      expect(e.message).toEqual("This operation was aborted");
     } finally {
       await conn.closeAndWait();
     }
@@ -91,7 +114,7 @@ describe("Connection", () => {
     try {
       await conn.waitOpen();
       const req = {};
-      const request = conn.request(req, 1000);
+      const request = conn.request(req, { timeout: 1000 });
       expect(request).toBeInstanceOf(AbortablePromise);
       await request;
     } catch (e) {
@@ -130,7 +153,7 @@ describe("MultiAltEndpointsConnection", () => {
         header: {},
       });
       await conn.waitOpen();
-      const request = conn.request(req, 1000);
+      const request = conn.request(req, { timeout: 1000 });
       expect(request).toBeInstanceOf(AbortablePromise);
       const result = await request;
       expect(JSON.parse(result.payload)).toEqual("world");
@@ -166,12 +189,87 @@ describe("MultiAltEndpointsConnection", () => {
     try {
       await conn.waitOpen(1000);
       const req = new msg_types.ping_req_t({});
-      const request = conn.request(req, 2000);
+      const request = conn.request(req, { timeout: 2000 });
       expect(request).toBeInstanceOf(AbortablePromise);
       await request;
     } catch (e) {
       expect(e).toBeInstanceOf(TimeoutError);
       expect(e.message).toEqual(`{"ref":1}`);
+    } finally {
+      await conn.closeAndWait();
+    }
+  });
+
+  it("abort request", async () => {
+    const conn = new MultiAltEndpointsConnection(
+      () => AbortablePromise.resolve("localhost:10000"),
+      makeConnectionOptions(),
+    );
+    expect(conn).toBeInstanceOf(MultiAltEndpointsConnection);
+    try {
+      await conn.waitOpen(1000);
+      const controller = new AbortController();
+      const req = new msg_types.ping_req_t({});
+      const request = conn.request(req, {
+        timeout: 5000,
+        signalOrController: controller.signal,
+      });
+      expect(request).toBeInstanceOf(AbortablePromise);
+      setTimeout(() => {
+        controller.abort();
+      }, 1000);
+      await request;
+    } catch (e) {
+      expect(e).toBeInstanceOf(DOMException);
+      expect(e.name).toEqual("AbortError");
+      expect(e.message).toEqual("This operation was aborted");
+    } finally {
+      await conn.closeAndWait();
+    }
+  });
+
+  it("abort multi requests", async () => {
+    const conn = new MultiAltEndpointsConnection(
+      () => AbortablePromise.resolve("localhost:10000"),
+      makeConnectionOptions(),
+    );
+    expect(conn).toBeInstanceOf(MultiAltEndpointsConnection);
+    try {
+      await conn.waitOpen(1000);
+      const controller = new AbortController();
+
+      const req1 = new msg_types.ping_req_t({});
+      const req2 = new msg_types.ping_req_t({});
+      const request1 = conn.request(req1, {
+        timeout: 5000,
+        signalOrController: controller,
+      });
+      const request2 = conn.request(req2, {
+        timeout: 5000,
+        signalOrController: controller,
+      });
+      expect(request1).toBeInstanceOf(AbortablePromise);
+      expect(request2).toBeInstanceOf(AbortablePromise);
+
+      setTimeout(() => {
+        controller.abort();
+      }, 1000);
+
+      try {
+        await request1;
+      } catch (e) {
+        expect(e).toBeInstanceOf(DOMException);
+        expect(e.name).toEqual("AbortError");
+        expect(e.message).toEqual("This operation was aborted");
+      }
+
+      try {
+        await request2;
+      } catch (e) {
+        expect(e).toBeInstanceOf(DOMException);
+        expect(e.name).toEqual("AbortError");
+        expect(e.message).toEqual("This operation was aborted");
+      }
     } finally {
       await conn.closeAndWait();
     }

@@ -34,6 +34,10 @@ export interface IEventHandler {
 }
 export declare class DefaultEventHandler implements IEventHandler {
 }
+export interface RequestOptions {
+    timeout?: number;
+    signalOrController?: AbortSignal | AbortController;
+}
 export type ProtocolMsg = any;
 export interface Identity {
     id(): number;
@@ -47,7 +51,7 @@ export interface IConnection extends IListenable, Identity {
     waitOpen(timeout?: number): AbortablePromise<IConnection>;
     close(): void;
     closeAndWait(): AbortablePromise<IConnection>;
-    request(msg: ProtocolMsg, timeout?: number): AbortablePromise<ProtocolMsg>;
+    request(msg: ProtocolMsg, options?: RequestOptions): AbortablePromise<ProtocolMsg>;
     send(msg: ProtocolMsg): void;
 }
 export declare class Connection extends Listenable implements IConnection {
@@ -81,7 +85,7 @@ export declare class Connection extends Listenable implements IConnection {
     waitOpen(timeout?: number): AbortablePromise<Connection>;
     close(): void;
     closeAndWait(): AbortablePromise<Connection>;
-    request(msg: ProtocolMsg, timeout?: number): AbortablePromise<ProtocolMsg>;
+    request(msg: ProtocolMsg, options?: RequestOptions): AbortablePromise<ProtocolMsg>;
     send(msg: ProtocolMsg): void;
     private _onMsg;
     private _onOpen;
@@ -132,7 +136,7 @@ export declare class MultiAltEndpointsConnection extends Listenable implements I
     isClosed(): boolean;
     close(): void;
     closeAndWait(timeout?: number): AbortablePromise<MultiAltEndpointsConnection>;
-    request(msg: any, timeout?: number | undefined): AbortablePromise<ProtocolMsg>;
+    request(msg: any, options?: RequestOptions): AbortablePromise<ProtocolMsg>;
     send(msg: any): void;
     onConnecting(connection: Connection, ...rest: any[]): void;
     onConnected(connection: Connection, ...rest: any[]): void;

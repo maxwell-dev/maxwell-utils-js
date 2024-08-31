@@ -65,7 +65,17 @@ export interface IEventHandler {
 
 export class DefaultEventHandler implements IEventHandler {}
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export interface RequestOptions {
+  // `timeout` specifies the number of milliseconds before the request times out.
+  // If the request takes longer than `timeout`, the request will be aborted.
+  // default is `ConnectionOptions.roundTimeout`
+  timeout?: number;
+
+  // An AbortSignal or AbortController. If this option is set, the request can be
+  // canceled by calling abort() on the corresponding AbortController.
+  signalOrController?: AbortSignal | AbortController;
+}
+
 export type ProtocolMsg = any;
 
 export interface Identity {
@@ -81,7 +91,10 @@ export interface IConnection extends IListenable, Identity {
   waitOpen(timeout?: number): AbortablePromise<IConnection>;
   close(): void;
   closeAndWait(): AbortablePromise<IConnection>;
-  request(msg: ProtocolMsg, timeout?: number): AbortablePromise<ProtocolMsg>;
+  request(
+    msg: ProtocolMsg,
+    options?: RequestOptions,
+  ): AbortablePromise<ProtocolMsg>;
   send(msg: ProtocolMsg): void;
 }
 
@@ -91,6 +104,7 @@ type Attachment = [(value: ProtocolMsg) => void, (reason?: Error) => void];
 enum ReadyState {
   CONNECTING = 0,
   OPEN = 1,
+  CLOSING = 2,
   CLOSED = 3,
 }
 
@@ -216,7 +230,11 @@ export class Connection extends Listenable implements IConnection {
     });
   }
 
-  request(msg: ProtocolMsg, timeout?: number): AbortablePromise<ProtocolMsg> {
+  request(
+    msg: ProtocolMsg,
+    options: RequestOptions = {},
+  ): AbortablePromise<ProtocolMsg> {
+    let { timeout, signalOrController } = options;
     if (typeof timeout === "undefined") {
       timeout = this._options.roundTimeout;
     }
@@ -230,7 +248,7 @@ export class Connection extends Listenable implements IConnection {
       timer = setTimeout(() => {
         reject(new TimeoutError(JSON.stringify(msg).substring(0, 100)));
       }, timeout);
-    })
+    }, signalOrController)
       .then((value: any) => {
         this._deleteAttachment(ref);
         clearTimeout(timer as number);
@@ -693,14 +711,14 @@ export class MultiAltEndpointsConnection
 
   request(
     msg: any,
-    timeout?: number | undefined,
+    options: RequestOptions = {},
   ): AbortablePromise<ProtocolMsg> {
     if (this._connection === null) {
       return AbortablePromise.reject(
         new Error("Failed to request: reason: connection lost"),
       );
     }
-    return this._connection.request(msg, timeout);
+    return this._connection.request(msg, options);
   }
 
   send(msg: any): void {
