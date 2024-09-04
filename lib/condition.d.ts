@@ -1,4 +1,5 @@
 import { AbortablePromise } from "@xuchaoqian/abortable-promise";
+import { AsyncOperationOptions } from "./internal";
 type Cond = () => boolean;
 export declare class Condition<T> {
     private _id;
@@ -7,7 +8,7 @@ export declare class Condition<T> {
     private _waiters;
     private _waiterId;
     constructor(target: T, cond: Cond);
-    wait(timeout?: number, msg?: string): AbortablePromise<T>;
+    wait(options?: AsyncOperationOptions): AbortablePromise<T>;
     notify(): void;
     throw(reason: unknown): void;
     clear(): void;

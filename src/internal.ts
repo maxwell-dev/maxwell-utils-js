@@ -1,6 +1,5 @@
-import { Timer } from "./types";
+import { Timer, AsyncOperationOptions } from "./types";
 import { Condition } from "./condition";
-import { TimeoutError } from "./timeout-error";
 import { Listenable, IListenable } from "./listenable";
 import {
   ProtocolMsg,
@@ -20,8 +19,8 @@ import { now, sleep } from "./utils";
 
 export {
   Timer,
+  AsyncOperationOptions,
   Condition,
-  TimeoutError,
   Listenable,
   IListenable,
   ProtocolMsg,

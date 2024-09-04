@@ -1,7 +1,6 @@
-import { Timer } from "./types";
+import { Timer, AsyncOperationOptions } from "./types";
 import { Condition } from "./condition";
-import { TimeoutError } from "./timeout-error";
 import { Listenable, IListenable } from "./listenable";
 import { ProtocolMsg, Event, IEventHandler, DefaultEventHandler, ConnectionOptions, makeConnectionOptions, IConnection, Connection, MultiAltEndpointsConnection, ConnectionPoolOptions, makeConnectionPoolOptions, ConnectionPool } from "./connection";
 import { now, sleep } from "./utils";
-export { Timer, Condition, TimeoutError, Listenable, IListenable, ProtocolMsg, Event, IEventHandler, DefaultEventHandler, ConnectionOptions, makeConnectionOptions, IConnection, Connection, MultiAltEndpointsConnection, ConnectionPoolOptions, makeConnectionPoolOptions, ConnectionPool, now, sleep, };
+export { Timer, AsyncOperationOptions, Condition, Listenable, IListenable, ProtocolMsg, Event, IEventHandler, DefaultEventHandler, ConnectionOptions, makeConnectionOptions, IConnection, Connection, MultiAltEndpointsConnection, ConnectionPoolOptions, makeConnectionPoolOptions, ConnectionPool, now, sleep, };

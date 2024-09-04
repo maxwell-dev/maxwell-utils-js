@@ -1,8 +1,10 @@
 import { AbortablePromise } from "@xuchaoqian/abortable-promise";
-import { Listenable, IListenable } from "./internal";
+import { AsyncOperationOptions, Listenable, IListenable } from "./internal";
 export interface ConnectionOptions {
     reconnectDelay?: number;
     heartbeatInterval?: number;
+    waitOpenTimeout?: number;
+    waitClosedTimeout?: number;
     roundTimeout?: number;
     unhealthyTimeout?: number;
     idleTimeout?: number;
@@ -34,10 +36,6 @@ export interface IEventHandler {
 }
 export declare class DefaultEventHandler implements IEventHandler {
 }
-export interface RequestOptions {
-    timeout?: number;
-    signalOrController?: AbortSignal | AbortController;
-}
 export type ProtocolMsg = any;
 export interface Identity {
     id(): number;
@@ -48,10 +46,10 @@ export interface IConnection extends IListenable, Identity {
     isHealthy(): boolean;
     isOpen(): boolean;
     isClosed(): boolean;
-    waitOpen(timeout?: number): AbortablePromise<IConnection>;
+    waitOpen(options?: AsyncOperationOptions): AbortablePromise<IConnection>;
     close(): void;
-    closeAndWait(): AbortablePromise<IConnection>;
-    request(msg: ProtocolMsg, options?: RequestOptions): AbortablePromise<ProtocolMsg>;
+    closeAndWait(options?: AsyncOperationOptions): AbortablePromise<IConnection>;
+    request(msg: ProtocolMsg, options?: AsyncOperationOptions): AbortablePromise<ProtocolMsg>;
     send(msg: ProtocolMsg): void;
 }
 export declare class Connection extends Listenable implements IConnection {
@@ -82,10 +80,10 @@ export declare class Connection extends Listenable implements IConnection {
     isIdle(): boolean;
     isOpen(): boolean;
     isClosed(): boolean;
-    waitOpen(timeout?: number): AbortablePromise<Connection>;
+    waitOpen(options?: AsyncOperationOptions): AbortablePromise<Connection>;
     close(): void;
-    closeAndWait(): AbortablePromise<Connection>;
-    request(msg: ProtocolMsg, options?: RequestOptions): AbortablePromise<ProtocolMsg>;
+    closeAndWait(options?: AsyncOperationOptions): AbortablePromise<Connection>;
+    request(msg: ProtocolMsg, options?: AsyncOperationOptions): AbortablePromise<ProtocolMsg>;
     send(msg: ProtocolMsg): void;
     private _onMsg;
     private _onOpen;
@@ -132,11 +130,11 @@ export declare class MultiAltEndpointsConnection extends Listenable implements I
     endpoint(): string | undefined;
     isHealthy(): boolean;
     isOpen(): boolean;
-    waitOpen(timeout?: number): AbortablePromise<MultiAltEndpointsConnection>;
+    waitOpen(options?: AsyncOperationOptions): AbortablePromise<MultiAltEndpointsConnection>;
     isClosed(): boolean;
     close(): void;
-    closeAndWait(timeout?: number): AbortablePromise<MultiAltEndpointsConnection>;
-    request(msg: any, options?: RequestOptions): AbortablePromise<ProtocolMsg>;
+    closeAndWait(options?: AsyncOperationOptions): AbortablePromise<MultiAltEndpointsConnection>;
+    request(msg: any, options?: AsyncOperationOptions): AbortablePromise<ProtocolMsg>;
     send(msg: any): void;
     onConnecting(connection: Connection, ...rest: any[]): void;
     onConnected(connection: Connection, ...rest: any[]): void;
@@ -170,9 +168,9 @@ export declare class ConnectionPool extends Listenable implements IEventHandler,
     id(): number;
     name(): string;
     size(): number;
-    waitAllOpen(timeout?: number): AbortablePromise<ConnectionPool>;
+    waitAllOpen(options?: AsyncOperationOptions): AbortablePromise<ConnectionPool>;
     close(): void;
-    closeAndWait(timeout?: number): AbortablePromise<ConnectionPool>;
+    closeAndWait(options?: AsyncOperationOptions): AbortablePromise<ConnectionPool>;
     getConnection(): MultiAltEndpointsConnection;
     onConnecting(connection: MultiAltEndpointsConnection, ...rest: any[]): void;
     onConnected(connection: MultiAltEndpointsConnection, ...rest: any[]): void;

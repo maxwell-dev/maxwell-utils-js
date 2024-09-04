@@ -8,10 +8,25 @@ type Result = any;
 type Callback = (...args: Result[]) => void;
 type Unlisten = () => void;
 
+export interface WaitEventOptions {
+  // `timeout` specifies the number of milliseconds waiting for the event to be
+  // notified. If the event is not notified within `timeout`, the wait will be
+  // aborted and the underlying promise will be rejected with a TimeoutError.
+  // the default value is `5000`.
+  timeout?: number;
+
+  // An AbortSignal. If this option is set, the wait will be canceled by calling
+  // abort() on the AbortSignal.
+  signal?: AbortSignal;
+}
+
 export interface IListenable {
   addListener(event: Event, callback: Callback): void;
   deleteListener(event: Event, callback: Callback): void;
-  waitEvent(event: Event, timeout?: number): AbortablePromise<Result[]>;
+  waitEvent(
+    event: Event,
+    options?: WaitEventOptions,
+  ): AbortablePromise<Result[]>;
   clear(): void;
   listeners(): Map<Event, Callback[]>;
   notify(event: Event, ...args: Result[]): void;
@@ -62,11 +77,13 @@ export class Listenable implements IListenable {
     }
   }
 
-  waitEvent(event: Event, timeout?: number): AbortablePromise<Result[]> {
+  waitEvent(
+    event: Event,
+    options: WaitEventOptions = {},
+  ): AbortablePromise<Result[]> {
+    let { timeout, signal } = options;
     if (typeof timeout === "undefined") {
-      // 2 ** 31 -1
-      // see: https://developer.mozilla.org/en-US/docs/Web/API/setTimeout#maximum_delay_value
-      timeout = 2147483647;
+      timeout = 5000;
     }
     let timer: Timer;
     return new AbortablePromise<Result[]>((resolve, reject) => {
@@ -78,7 +95,7 @@ export class Listenable implements IListenable {
         unlisten();
         reject(new Error(`Timeout to wait: event: ${event}`));
       }, timeout);
-    })
+    }, signal)
       .then((value) => {
         clearTimeout(timer as number);
         return value;

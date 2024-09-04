@@ -1,11 +1,15 @@
-import { AbortablePromise, AbortError } from "@xuchaoqian/abortable-promise";
+import {
+  AbortablePromise,
+  AbortError,
+  TimeoutError,
+} from "@xuchaoqian/abortable-promise";
 import { msg_types, encode_msg, decode_msg } from "maxwell-protocol";
 import {
   Timer,
+  AsyncOperationOptions,
   Condition,
   Listenable,
   IListenable,
-  TimeoutError,
   now,
 } from "./internal";
 
@@ -15,6 +19,8 @@ const WebSocketImpl =
 export interface ConnectionOptions {
   reconnectDelay?: number;
   heartbeatInterval?: number;
+  waitOpenTimeout?: number;
+  waitClosedTimeout?: number;
   roundTimeout?: number;
   unhealthyTimeout?: number;
   idleTimeout?: number;
@@ -31,6 +37,8 @@ export function makeConnectionOptions(
   return {
     reconnectDelay: options.reconnectDelay ?? 3000,
     heartbeatInterval: options.heartbeatInterval ?? 10000,
+    waitOpenTimeout: options.waitOpenTimeout ?? 5000,
+    waitClosedTimeout: options.waitClosedTimeout ?? 5000,
     roundTimeout: options.roundTimeout ?? 15000,
     unhealthyTimeout: options.unhealthyTimeout ?? 22500,
     idleTimeout: options.idleTimeout ?? 30000,
@@ -65,17 +73,6 @@ export interface IEventHandler {
 
 export class DefaultEventHandler implements IEventHandler {}
 
-export interface RequestOptions {
-  // `timeout` specifies the number of milliseconds before the request times out.
-  // If the request takes longer than `timeout`, the request will be aborted.
-  // default is `ConnectionOptions.roundTimeout`
-  timeout?: number;
-
-  // An AbortSignal or AbortController. If this option is set, the request can be
-  // canceled by calling abort() on the corresponding AbortController.
-  signalOrController?: AbortSignal | AbortController;
-}
-
 export type ProtocolMsg = any;
 
 export interface Identity {
@@ -88,12 +85,37 @@ export interface IConnection extends IListenable, Identity {
   isHealthy(): boolean;
   isOpen(): boolean;
   isClosed(): boolean;
-  waitOpen(timeout?: number): AbortablePromise<IConnection>;
+  /**
+   * Waits for the connection to open.
+   *
+   * @param {AsyncOperationOptions} [options] - Options for the wait operation.
+   * @param {number} [options.timeout] - specifies the number of milliseconds waiting for the connection to be opened. If the connection is not opened within `timeout`, the wait will be aborted and the underlying promise will be rejected with a TimeoutError. default is `5000` milliseconds.
+   * @param {AbortSignal} [options.signal] - An AbortSignal that can be used to cancel the wait operation.
+   * @returns {AbortablePromise<IConnection>} A promise that resolves when the connection is open.
+   */
+  waitOpen(options?: AsyncOperationOptions): AbortablePromise<IConnection>;
   close(): void;
-  closeAndWait(): AbortablePromise<IConnection>;
+  /**
+   * Closes the connection and waits for it to be closed.
+   *
+   * @param {AsyncOperationOptions} [options] - Options for the close and wait operation.
+   * @param {number} [options.timeout] - specifies the number of milliseconds waiting for the connection to be closed. If the connection is not closed within `timeout`, the wait will be aborted and the underlying promise will be rejected with a TimeoutError. default is `5000` milliseconds.
+   * @param {AbortSignal} [options.signal] - An AbortSignal that can be used to cancel the close and wait operation.
+   * @returns {AbortablePromise<IConnection>} A promise that resolves when the connection is closed.
+   */
+  closeAndWait(options?: AsyncOperationOptions): AbortablePromise<IConnection>;
+  /**
+   * Sends a request and waits for the response.
+   *
+   * @param {ProtocolMsg} msg - The request message.
+   * @param {AsyncOperationOptions} [options] - Options for the request operation.
+   * @param {number} [options.timeout] - specifies the number of milliseconds before the request times out. If the request takes longer than `timeout`, the request will be aborted and the underlying promise will be rejected with a TimeoutError. default is `15000` milliseconds.
+   * @param {AbortSignal} [options.signal] - An AbortSignal that can be used to cancel the request operation.
+   * @returns {AbortablePromise<ProtocolMsg>} A promise that resolves when the response is received.
+   */
   request(
     msg: ProtocolMsg,
-    options?: RequestOptions,
+    options?: AsyncOperationOptions,
   ): AbortablePromise<ProtocolMsg>;
   send(msg: ProtocolMsg): void;
 }
@@ -205,8 +227,14 @@ export class Connection extends Listenable implements IConnection {
     return !this._shouldRun && this._readyState === ReadyState.CLOSED;
   }
 
-  waitOpen(timeout?: number): AbortablePromise<Connection> {
-    return this._openCondition.wait(timeout);
+  waitOpen(options: AsyncOperationOptions = {}): AbortablePromise<Connection> {
+    if (typeof options.timeout === "undefined") {
+      options = {
+        timeout: this._options.waitOpenTimeout,
+        signal: options.signal,
+      };
+    }
+    return this._openCondition.wait(options);
   }
 
   close(): void {
@@ -222,9 +250,17 @@ export class Connection extends Listenable implements IConnection {
     this._attachments.clear();
   }
 
-  closeAndWait(): AbortablePromise<Connection> {
+  closeAndWait(
+    options: AsyncOperationOptions = {},
+  ): AbortablePromise<Connection> {
     this.close();
-    return this._closedCondition.wait().then(() => {
+    if (typeof options.timeout === "undefined") {
+      options = {
+        timeout: this._options.waitClosedTimeout,
+        signal: options.signal,
+      };
+    }
+    return this._closedCondition.wait(options).then(() => {
       super.clear();
       return this;
     });
@@ -232,9 +268,9 @@ export class Connection extends Listenable implements IConnection {
 
   request(
     msg: ProtocolMsg,
-    options: RequestOptions = {},
+    options: AsyncOperationOptions = {},
   ): AbortablePromise<ProtocolMsg> {
-    let { timeout, signalOrController } = options;
+    let { timeout, signal } = options;
     if (typeof timeout === "undefined") {
       timeout = this._options.roundTimeout;
     }
@@ -248,7 +284,7 @@ export class Connection extends Listenable implements IConnection {
       timer = setTimeout(() => {
         reject(new TimeoutError(JSON.stringify(msg).substring(0, 100)));
       }, timeout);
-    }, signalOrController)
+    }, signal)
       .then((value: any) => {
         this._deleteAttachment(ref);
         clearTimeout(timer as number);
@@ -680,8 +716,16 @@ export class MultiAltEndpointsConnection
     return this._connection !== null && this._connection.isOpen();
   }
 
-  waitOpen(timeout?: number): AbortablePromise<MultiAltEndpointsConnection> {
-    return this._openCondition.wait(timeout);
+  waitOpen(
+    options: AsyncOperationOptions = {},
+  ): AbortablePromise<MultiAltEndpointsConnection> {
+    if (typeof options.timeout === "undefined") {
+      options = {
+        timeout: this._options.waitOpenTimeout,
+        signal: options.signal,
+      };
+    }
+    return this._openCondition.wait(options);
   }
 
   isClosed(): boolean {
@@ -700,10 +744,16 @@ export class MultiAltEndpointsConnection
   }
 
   closeAndWait(
-    timeout?: number,
+    options: AsyncOperationOptions = {},
   ): AbortablePromise<MultiAltEndpointsConnection> {
     this.close();
-    return this._closedCondition.wait(timeout).then(() => {
+    if (typeof options.timeout === "undefined") {
+      options = {
+        timeout: this._options.waitClosedTimeout,
+        signal: options.signal,
+      };
+    }
+    return this._closedCondition.wait(options).then(() => {
       super.clear();
       return this;
     });
@@ -711,7 +761,7 @@ export class MultiAltEndpointsConnection
 
   request(
     msg: any,
-    options: RequestOptions = {},
+    options?: AsyncOperationOptions,
   ): AbortablePromise<ProtocolMsg> {
     if (this._connection === null) {
       return AbortablePromise.reject(
@@ -917,9 +967,11 @@ export class ConnectionPool
     return this._allConnections.length;
   }
 
-  waitAllOpen(timeout?: number): AbortablePromise<ConnectionPool> {
+  waitAllOpen(
+    options?: AsyncOperationOptions,
+  ): AbortablePromise<ConnectionPool> {
     const promises = this._allConnections.map((connection) =>
-      connection.waitOpen(timeout),
+      connection.waitOpen(options),
     );
     return AbortablePromise.all(promises).then(() => this);
   }
@@ -937,7 +989,9 @@ export class ConnectionPool
     this._closingConnections.clear();
   }
 
-  closeAndWait(timeout?: number): AbortablePromise<ConnectionPool> {
+  closeAndWait(
+    options?: AsyncOperationOptions,
+  ): AbortablePromise<ConnectionPool> {
     if (!this._shouldRun) {
       return AbortablePromise.resolve(this);
     }
@@ -948,7 +1002,7 @@ export class ConnectionPool
     }
     const promises = [];
     for (const connection of this._closingConnections.values()) {
-      promises.push(connection.closeAndWait(timeout));
+      promises.push(connection.closeAndWait(options));
     }
     return AbortablePromise.all(promises).then(() => {
       this._allConnections = [];
