@@ -15,7 +15,7 @@ import {
   makeConnectionPoolOptions,
   ConnectionPool,
 } from "./connection";
-import { now, sleep } from "./utils";
+import { nowInMilliseconds, nowInSeconds, sleep } from "./utils";
 
 export {
   Timer,
@@ -35,6 +35,7 @@ export {
   ConnectionPoolOptions,
   makeConnectionPoolOptions,
   ConnectionPool,
-  now,
+  nowInMilliseconds,
+  nowInSeconds,
   sleep,
 };

@@ -10,7 +10,7 @@ import {
   Condition,
   Listenable,
   IListenable,
-  now,
+  nowInMilliseconds,
 } from "./internal";
 
 const WebSocketImpl =
@@ -81,35 +81,65 @@ export interface Identity {
 }
 
 export interface IConnection extends IListenable, Identity {
+  /**
+   * Gets the endpoint of the connection.
+   *
+   * @returns {string | undefined} Returns the endpoint of the connection.
+   */
   endpoint(): string | undefined;
+
+  /**
+   * Checks if the connection is healthy.
+   *
+   * @returns {boolean} Returns true if the connection is healthy, otherwise false.
+   */
   isHealthy(): boolean;
+
+  /**
+   * Checks if the connection is open.
+   *
+   * @returns {boolean} Returns true if the connection is open, otherwise false.
+   */
   isOpen(): boolean;
+
+  /**
+   * Checks if the connection is closed.
+   *
+   * @returns {boolean} Returns true if the connection is closed, otherwise false.
+   */
   isClosed(): boolean;
+
   /**
    * Waits for the connection to open.
    *
    * @param {AsyncOperationOptions} [options] - Options for the wait operation.
-   * @param {number} [options.timeout] - specifies the number of milliseconds waiting for the connection to be opened. If the connection is not opened within `timeout`, the wait will be aborted and the underlying promise will be rejected with a TimeoutError. default is `5000` milliseconds.
+   * @param {number} [options.timeout] - specifies the number of milliseconds waiting for the connection to be opened. If the connection is not opened within `timeout`, the wait will be aborted and the underlying promise will be rejected with a TimeoutError. default is `ConnectionOptions.waitOpenTimeout` milliseconds.
    * @param {AbortSignal} [options.signal] - An AbortSignal that can be used to cancel the wait operation.
    * @returns {AbortablePromise<IConnection>} A promise that resolves when the connection is open.
    */
   waitOpen(options?: AsyncOperationOptions): AbortablePromise<IConnection>;
+
+  /**
+   * Closes the connection.
+   */
   close(): void;
+
   /**
    * Closes the connection and waits for it to be closed.
    *
    * @param {AsyncOperationOptions} [options] - Options for the close and wait operation.
-   * @param {number} [options.timeout] - specifies the number of milliseconds waiting for the connection to be closed. If the connection is not closed within `timeout`, the wait will be aborted and the underlying promise will be rejected with a TimeoutError. default is `5000` milliseconds.
+   * @param {number} [options.timeout] - specifies the number of milliseconds waiting for the connection to be closed. If the connection is not closed within `timeout`, the wait will be aborted and the underlying promise will be rejected with a TimeoutError. default is `ConnectionOptions.waitClosedTimeout` milliseconds.
    * @param {AbortSignal} [options.signal] - An AbortSignal that can be used to cancel the close and wait operation.
    * @returns {AbortablePromise<IConnection>} A promise that resolves when the connection is closed.
    */
   closeAndWait(options?: AsyncOperationOptions): AbortablePromise<IConnection>;
+
   /**
    * Sends a request and waits for the response.
    *
    * @param {ProtocolMsg} msg - The request message.
    * @param {AsyncOperationOptions} [options] - Options for the request operation.
-   * @param {number} [options.timeout] - specifies the number of milliseconds before the request times out. If the request takes longer than `timeout`, the request will be aborted and the underlying promise will be rejected with a TimeoutError. default is `15000` milliseconds.
+   * @param {number} [options.timeout] - specifies the number of milliseconds before the request times out. If the request takes longer than `timeout`, the request will be aborted and the underlying promise will be rejected with a TimeoutError. default is `ConnectionOptions.roundTimeout` milliseconds.
    * @param {AbortSignal} [options.signal] - An AbortSignal that can be used to cancel the request operation.
    * @returns {AbortablePromise<ProtocolMsg>} A promise that resolves when the response is received.
    */
@@ -117,6 +147,12 @@ export interface IConnection extends IListenable, Identity {
     msg: ProtocolMsg,
     options?: AsyncOperationOptions,
   ): AbortablePromise<ProtocolMsg>;
+
+  /**
+   * Sends a message.
+   *
+   * @param {ProtocolMsg} msg - The message to send.
+   */
   send(msg: ProtocolMsg): void;
 }
 
@@ -306,7 +342,7 @@ export class Connection extends Listenable implements IConnection {
   }
 
   send(msg: ProtocolMsg): void {
-    const nowMs = now();
+    const nowMs = nowInMilliseconds();
     this._sentAt = nowMs;
     if (msg.constructor !== msg_types.ping_rep_t) {
       this._sendNonePingAt = nowMs;
@@ -353,7 +389,7 @@ export class Connection extends Listenable implements IConnection {
   //===========================================
 
   private _onMsg(event: any): void {
-    this._receivedAt = now();
+    this._receivedAt = nowInMilliseconds();
 
     let msg: ProtocolMsg;
 
@@ -408,7 +444,7 @@ export class Connection extends Listenable implements IConnection {
     console.info(
       `<${this.name()}>Connection connected: endpoint: ${this._endpoint}`,
     );
-    const nowMs = now();
+    const nowMs = nowInMilliseconds();
     this._sentAt = nowMs;
     this._sendNonePingAt = nowMs;
     this._receivedAt = nowMs;
@@ -503,7 +539,7 @@ export class Connection extends Listenable implements IConnection {
     if (!this._shouldRun) {
       return;
     }
-    const nowMs = now();
+    const nowMs = nowInMilliseconds();
     let duration = this._calcDelayForNextHeartbeat(nowMs);
     if (duration <= 1000) {
       // Send heartbeat immediately if the delay less than 1s,
@@ -546,7 +582,7 @@ export class Connection extends Listenable implements IConnection {
     }
     this._stopRepeatCheckStatus();
     this._checkStatusTimer = setInterval(() => {
-      const nowMs = now();
+      const nowMs = nowInMilliseconds();
       this._checkUnhealthyTimeout(nowMs);
       this._checkIdleTimeout(nowMs);
     }, this._calcIntervalForCheckStatus());
@@ -738,7 +774,7 @@ export class MultiAltEndpointsConnection
     }
     this._shouldRun = false;
     this._stopReconnect();
-    this._connectTask?.abort(new AbortError());
+    this._connectTask?.abort("hell0");
     this._openCondition.clear();
     this._connection?.close();
   }
@@ -1004,13 +1040,20 @@ export class ConnectionPool
     for (const connection of this._closingConnections.values()) {
       promises.push(connection.closeAndWait(options));
     }
-    return AbortablePromise.all(promises).then(() => {
-      this._allConnections = [];
-      this._healthyConnections = [];
-      this._closingConnections.clear();
-      super.clear();
-      return this;
-    });
+    return AbortablePromise.all(promises)
+      .then(() => {
+        this._allConnections = [];
+        this._healthyConnections = [];
+        this._closingConnections.clear();
+        super.clear();
+        return this;
+      })
+      .catch((reason: any) => {
+        console.error(
+          `<${this.name()}>Failed to close and wait for all connections: reason: ${reason}`,
+        );
+        return this;
+      });
   }
 
   getConnection(): MultiAltEndpointsConnection {

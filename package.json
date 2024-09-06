@@ -1,6 +1,6 @@
 {
   "name": "maxwell-utils",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "description": "Maxwell utils implementation for js/ts.",
   "author": "Chaoqian Xu <chaoranxu@gmail.com>",
   "license": "MIT",
@@ -19,26 +19,20 @@
   ],
   "repository": "https://github.com/maxwell-dev/maxwell-utils-js.git",
   "dependencies": {
-    "@xuchaoqian/abortable-promise": "~1.8.0",
+    "@xuchaoqian/abortable-promise": "~1.10.3",
     "maxwell-protocol": "~1.4.2",
     "ws": "~8.18.0"
   },
   "devDependencies": {
-    "@babel/cli": "~7.25.6",
     "@babel/core": "~7.25.2",
     "@babel/preset-env": "~7.25.4",
     "@babel/preset-typescript": "~7.24.7",
-    "@msgpack/msgpack": "~2.8.0",
+    "@babel/runtime": "~7.25.6",
     "@types/jest": "~29.5.12",
     "@types/node": "~22.5.2",
     "babel-jest": "~29.7.0",
-    "bufferutil": "~4.0.8",
-    "canvas": "~2.11.2",
     "jest": "~29.7.0",
     "rimraf": "~6.0.1",
-    "ts-loader": "~9.5.1",
-    "ts-node": "~10.9.2",
-    "typescript": "~5.5.4",
-    "utf-8-validate": "~6.0.4"
+    "typescript": "~5.5.4"
   }
 }

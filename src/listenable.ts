@@ -1,5 +1,5 @@
 import { AbortablePromise } from "@xuchaoqian/abortable-promise";
-import { Timer } from "./internal";
+import { AsyncOperationOptions, Timer } from "./internal";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Event = any;
@@ -8,27 +8,55 @@ type Result = any;
 type Callback = (...args: Result[]) => void;
 type Unlisten = () => void;
 
-export interface WaitEventOptions {
-  // `timeout` specifies the number of milliseconds waiting for the event to be
-  // notified. If the event is not notified within `timeout`, the wait will be
-  // aborted and the underlying promise will be rejected with a TimeoutError.
-  // the default value is `5000`.
-  timeout?: number;
-
-  // An AbortSignal. If this option is set, the wait will be canceled by calling
-  // abort() on the AbortSignal.
-  signal?: AbortSignal;
-}
-
 export interface IListenable {
+  /**
+   * Adds a listener.
+   *
+   * @param {Event} event - The event to add the listener for.
+   * @param {Callback} callback - The callback to add.
+   */
   addListener(event: Event, callback: Callback): void;
+
+  /**
+   * Deletes a listener.
+   *
+   * @param {Event} event - The event to delete the listener for.
+   * @param {Callback} callback - The callback to delete.
+   */
   deleteListener(event: Event, callback: Callback): void;
+
+  /**
+   * Waits for the event to be notified.
+   *
+   * @param {Event} event - The event to wait for.
+   * @param {AsyncOperationOptions} [options] - Options for the wait operation.
+   * @param {number} [options.timeout] - Specifies the number of milliseconds waiting for the event to be notified. If the event is not notified within `timeout`, the wait will be aborted and the underlying promise will be rejected with a TimeoutError. default is `5000` milliseconds.
+   * @param {AbortSignal} [options.signal] - An AbortSignal that can be used to cancel the wait operation.
+   * @returns {AbortablePromise<Result[]>} A promise that resolves when the event is notified.
+   */
   waitEvent(
     event: Event,
-    options?: WaitEventOptions,
+    options?: AsyncOperationOptions,
   ): AbortablePromise<Result[]>;
+
+  /**
+   * Clears all listeners.
+   */
   clear(): void;
+
+  /**
+   * Gets all listeners.
+   *
+   * @returns {Map<Event, Callback[]>} Returns a map of all listeners.
+   */
   listeners(): Map<Event, Callback[]>;
+
+  /**
+   * Notifies all listeners of an event.
+   *
+   * @param {Event} event - The event to notify.
+   * @param {...Result[]} args - The arguments to pass to the listeners.
+   */
   notify(event: Event, ...args: Result[]): void;
 }
 
@@ -79,7 +107,7 @@ export class Listenable implements IListenable {
 
   waitEvent(
     event: Event,
-    options: WaitEventOptions = {},
+    options: AsyncOperationOptions = {},
   ): AbortablePromise<Result[]> {
     let { timeout, signal } = options;
     if (typeof timeout === "undefined") {

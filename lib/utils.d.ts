@@ -1,2 +1,3 @@
-export declare function now(): number;
-export declare function sleep(ms: number): Promise<void>;
+export declare function nowInSeconds(): number;
+export declare function nowInMilliseconds(): number;
+export declare function sleep(milliseconds: number): Promise<void>;
