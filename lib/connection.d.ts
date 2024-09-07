@@ -11,7 +11,7 @@ export interface ConnectionOptions {
     sslEnabled?: boolean;
     roundLogEnabled?: boolean;
 }
-export declare function makeConnectionOptions(options?: ConnectionOptions): Required<ConnectionOptions>;
+export declare function buildConnectionOptions(options?: ConnectionOptions): Required<ConnectionOptions>;
 export declare enum Event {
     ON_CONNECTING = 100,
     ON_CONNECTED = 101,
@@ -153,7 +153,7 @@ export type ConnectionPoolOptions = {
     minPoolSize?: number;
     maxPoolSize?: number;
 } & ConnectionOptions;
-export declare function makeConnectionPoolOptions(options?: ConnectionPoolOptions): Required<ConnectionPoolOptions>;
+export declare function buildConnectionPoolOptions(options?: ConnectionPoolOptions): Required<ConnectionPoolOptions>;
 export declare class ConnectionPool extends Listenable implements IEventHandler, Identity {
     private _id;
     private _pickEndpoint;

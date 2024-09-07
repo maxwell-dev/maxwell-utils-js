@@ -1,23 +1,23 @@
 import {
-  AbortablePromise,
   AbortError,
   TimeoutError,
-  AbortControllerExt as AbortController,
-  AbortSignalExt as AbortSignal,
+  AbortController,
+  AbortSignal,
+  AbortablePromise,
 } from "@xuchaoqian/abortable-promise";
 import { msg_types } from "maxwell-protocol";
 import {
   Connection,
-  makeConnectionOptions,
+  buildConnectionOptions,
   Event,
   MultiAltEndpointsConnection,
   ConnectionPool,
-  makeConnectionPoolOptions,
+  buildConnectionPoolOptions,
 } from "../src/index";
 
 describe("Connection", () => {
   it("normal request", async () => {
-    const conn = new Connection("localhost:10000", makeConnectionOptions());
+    const conn = new Connection("localhost:10000", buildConnectionOptions());
     expect(conn).toBeInstanceOf(Connection);
     try {
       await conn.waitOpen();
@@ -38,7 +38,7 @@ describe("Connection", () => {
   });
 
   it("path not exist", async () => {
-    const conn = new Connection("localhost:10000", makeConnectionOptions());
+    const conn = new Connection("localhost:10000", buildConnectionOptions());
     expect(conn).toBeInstanceOf(Connection);
     try {
       await conn.waitOpen();
@@ -61,7 +61,7 @@ describe("Connection", () => {
   });
 
   it("timeout to connect", async () => {
-    const conn = new Connection("localhost:1", makeConnectionOptions());
+    const conn = new Connection("localhost:1", buildConnectionOptions());
     expect(conn).toBeInstanceOf(Connection);
     try {
       await conn.waitOpen({ timeout: 1000 });
@@ -74,7 +74,7 @@ describe("Connection", () => {
   });
 
   it("timeout to request", async () => {
-    const conn = new Connection("localhost:10000", makeConnectionOptions());
+    const conn = new Connection("localhost:10000", buildConnectionOptions());
     expect(conn).toBeInstanceOf(Connection);
     try {
       await conn.waitOpen();
@@ -91,7 +91,7 @@ describe("Connection", () => {
   });
 
   it("abort request", async () => {
-    const conn = new Connection("localhost:10000", makeConnectionOptions());
+    const conn = new Connection("localhost:10000", buildConnectionOptions());
     expect(conn).toBeInstanceOf(Connection);
     try {
       await conn.waitOpen();
@@ -114,7 +114,7 @@ describe("Connection", () => {
   });
 
   it("failed to encode", async () => {
-    const conn = new Connection("localhost:10000", makeConnectionOptions());
+    const conn = new Connection("localhost:10000", buildConnectionOptions());
     expect(conn).toBeInstanceOf(Connection);
     try {
       await conn.waitOpen();
@@ -133,7 +133,7 @@ describe("Connection", () => {
   });
 
   it("on connected", async () => {
-    const conn = new Connection("localhost:10000", makeConnectionOptions());
+    const conn = new Connection("localhost:10000", buildConnectionOptions());
     expect(conn).toBeInstanceOf(Connection);
     try {
       const result = await conn.waitEvent(Event.ON_CONNECTED, {
@@ -150,7 +150,7 @@ describe("MultiAltEndpointsConnection", () => {
   it("normal request", async () => {
     const conn = new MultiAltEndpointsConnection(
       () => AbortablePromise.resolve("localhost:10000"),
-      makeConnectionOptions(),
+      buildConnectionOptions(),
     );
     expect(conn).toBeInstanceOf(MultiAltEndpointsConnection);
     try {
@@ -174,7 +174,7 @@ describe("MultiAltEndpointsConnection", () => {
   it("timeout to connect", async () => {
     const conn = new MultiAltEndpointsConnection(
       () => AbortablePromise.resolve("localhost:1"),
-      makeConnectionOptions(),
+      buildConnectionOptions(),
     );
     expect(conn).toBeInstanceOf(MultiAltEndpointsConnection);
     try {
@@ -190,7 +190,7 @@ describe("MultiAltEndpointsConnection", () => {
   it("signal.timeout to connect", async () => {
     const conn = new MultiAltEndpointsConnection(
       () => AbortablePromise.resolve("localhost:1"),
-      makeConnectionOptions(),
+      buildConnectionOptions(),
     );
     expect(conn).toBeInstanceOf(MultiAltEndpointsConnection);
     try {
@@ -206,7 +206,7 @@ describe("MultiAltEndpointsConnection", () => {
   it("timeout to request", async () => {
     const conn = new MultiAltEndpointsConnection(
       () => AbortablePromise.resolve("localhost:10000"),
-      makeConnectionOptions(),
+      buildConnectionOptions(),
     );
     expect(conn).toBeInstanceOf(MultiAltEndpointsConnection);
     try {
@@ -226,7 +226,7 @@ describe("MultiAltEndpointsConnection", () => {
   it("signal.timeout to request", async () => {
     const conn = new MultiAltEndpointsConnection(
       () => AbortablePromise.resolve("localhost:10000"),
-      makeConnectionOptions(),
+      buildConnectionOptions(),
     );
     expect(conn).toBeInstanceOf(MultiAltEndpointsConnection);
     try {
@@ -246,7 +246,7 @@ describe("MultiAltEndpointsConnection", () => {
   it("abort request", async () => {
     const conn = new MultiAltEndpointsConnection(
       () => AbortablePromise.resolve("localhost:10000"),
-      makeConnectionOptions(),
+      buildConnectionOptions(),
     );
     expect(conn).toBeInstanceOf(MultiAltEndpointsConnection);
     try {
@@ -274,7 +274,7 @@ describe("MultiAltEndpointsConnection", () => {
   it("abort multi requests", async () => {
     const conn = new MultiAltEndpointsConnection(
       () => AbortablePromise.resolve("localhost:10000"),
-      makeConnectionOptions(),
+      buildConnectionOptions(),
     );
     expect(conn).toBeInstanceOf(MultiAltEndpointsConnection);
     try {
@@ -321,7 +321,7 @@ describe("MultiAltEndpointsConnection", () => {
   it("on connected", async () => {
     const conn = new MultiAltEndpointsConnection(
       () => AbortablePromise.resolve("localhost:10000"),
-      makeConnectionOptions(),
+      buildConnectionOptions(),
     );
     expect(conn).toBeInstanceOf(MultiAltEndpointsConnection);
     try {
@@ -335,7 +335,7 @@ describe("MultiAltEndpointsConnection", () => {
 
 describe("ConnectionPool", () => {
   it("initial size", async () => {
-    const options = makeConnectionPoolOptions();
+    const options = buildConnectionPoolOptions();
     const pool = new ConnectionPool(
       () => AbortablePromise.resolve("localhost:10000"),
       options,
@@ -348,7 +348,7 @@ describe("ConnectionPool", () => {
   it(
     "unhealthy timeout",
     async () => {
-      const options = makeConnectionPoolOptions({
+      const options = buildConnectionPoolOptions({
         heartbeatInterval: 5000,
         unhealthyTimeout: 1000,
         roundLogEnabled: true,
@@ -377,7 +377,7 @@ describe("ConnectionPool", () => {
   it(
     "idle timeout",
     async () => {
-      const options = makeConnectionPoolOptions({
+      const options = buildConnectionPoolOptions({
         unhealthyTimeout: 5000,
         idleTimeout: 1000,
         roundLogEnabled: true,

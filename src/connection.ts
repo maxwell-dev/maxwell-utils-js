@@ -28,7 +28,7 @@ export interface ConnectionOptions {
   roundLogEnabled?: boolean;
 }
 
-export function makeConnectionOptions(
+export function buildConnectionOptions(
   options?: ConnectionOptions,
 ): Required<ConnectionOptions> {
   if (typeof options === "undefined") {
@@ -940,7 +940,7 @@ export type ConnectionPoolOptions = {
   maxPoolSize?: number;
 } & ConnectionOptions;
 
-export function makeConnectionPoolOptions(
+export function buildConnectionPoolOptions(
   options?: ConnectionPoolOptions,
 ): Required<ConnectionPoolOptions> {
   if (typeof options === "undefined") {
@@ -949,7 +949,7 @@ export function makeConnectionPoolOptions(
   return {
     minPoolSize: options.minPoolSize ?? 1,
     maxPoolSize: options.maxPoolSize ?? 3,
-    ...makeConnectionOptions(options),
+    ...buildConnectionOptions(options),
   };
 }
 
