@@ -1,6 +1,6 @@
 import { Timer, AsyncOperationOptions } from "./types";
 import { Condition } from "./condition";
 import { Listenable, IListenable } from "./listenable";
-import { ProtocolMsg, Event, IEventHandler, DefaultEventHandler, ConnectionOptions, buildConnectionOptions, IConnection, Connection, MultiAltEndpointsConnection, ConnectionPoolOptions, buildConnectionPoolOptions, ConnectionPool } from "./connection";
+import { ProtocolMsg, Event, IEventHandler, DefaultEventHandler, ConnectionOptions, buildConnectionOptions, IConnection, Connection, MultiAltEndpointsConnection, PickEndpoint, IConnectionFactory, ConnectionFactory, MultiAltEndpointsConnectionFactory, ConnectionPoolOptions, buildConnectionPoolOptions, ConnectionPool } from "./connection";
 import { nowInMilliseconds, nowInSeconds, sleep } from "./utils";
-export { Timer, AsyncOperationOptions, Condition, Listenable, IListenable, ProtocolMsg, Event, IEventHandler, DefaultEventHandler, ConnectionOptions, buildConnectionOptions, IConnection, Connection, MultiAltEndpointsConnection, ConnectionPoolOptions, buildConnectionPoolOptions, ConnectionPool, nowInMilliseconds, nowInSeconds, sleep, };
+export { Timer, AsyncOperationOptions, Condition, Listenable, IListenable, ProtocolMsg, Event, IEventHandler, DefaultEventHandler, ConnectionOptions, buildConnectionOptions, IConnection, Connection, MultiAltEndpointsConnection, PickEndpoint, IConnectionFactory, ConnectionFactory, MultiAltEndpointsConnectionFactory, ConnectionPoolOptions, buildConnectionPoolOptions, ConnectionPool, nowInMilliseconds, nowInSeconds, sleep, };

@@ -156,6 +156,12 @@ export interface IConnection extends IListenable, Identity {
   send(msg: ProtocolMsg): void;
 }
 
+export type PickEndpoint = () => AbortablePromise<string>;
+
+export interface IConnectionFactory<C extends IConnection> {
+  create(options: Required<ConnectionOptions>, eventHandler: IEventHandler): C;
+}
+
 // [resolve, reject]
 type Attachment = [(value: ProtocolMsg) => void, (reason?: Error) => void];
 
@@ -681,7 +687,20 @@ export class Connection extends Listenable implements IConnection {
   }
 }
 
-type PickEndpoint = () => AbortablePromise<string>;
+export class ConnectionFactory implements IConnectionFactory<Connection> {
+  private _endpoint: string;
+
+  constructor(endpoint: string) {
+    this._endpoint = endpoint;
+  }
+
+  create(
+    options: Required<ConnectionOptions>,
+    eventHandler: IEventHandler,
+  ): Connection {
+    return new Connection(this._endpoint, options, eventHandler);
+  }
+}
 
 export class MultiAltEndpointsConnection
   extends Listenable
@@ -953,18 +972,39 @@ export function buildConnectionPoolOptions(
   };
 }
 
-export class ConnectionPool
+export class MultiAltEndpointsConnectionFactory
+  implements IConnectionFactory<MultiAltEndpointsConnection>
+{
+  private _pickEndpoint: PickEndpoint;
+
+  constructor(pickEndpoint: PickEndpoint) {
+    this._pickEndpoint = pickEndpoint;
+  }
+
+  create(
+    options: Required<ConnectionOptions>,
+    eventHandler: IEventHandler,
+  ): MultiAltEndpointsConnection {
+    return new MultiAltEndpointsConnection(
+      this._pickEndpoint,
+      options,
+      eventHandler,
+    );
+  }
+}
+
+export class ConnectionPool<C extends IConnection>
   extends Listenable
   implements IEventHandler, Identity
 {
   private _id: number = ++ID_SEED;
-  private _pickEndpoint: PickEndpoint;
+  private _connectionFactory: IConnectionFactory<C>;
   private _options: Required<ConnectionPoolOptions>;
   private _eventHandler: IEventHandler;
   private _shouldRun: boolean;
-  private _allConnections: MultiAltEndpointsConnection[];
-  private _healthyConnections: MultiAltEndpointsConnection[];
-  private _closingConnections: Map<number, MultiAltEndpointsConnection>;
+  private _allConnections: C[];
+  private _healthyConnections: C[];
+  private _closingConnections: Map<number, C>;
   private _healthyIndexSeed: number;
 
   //===========================================
@@ -972,18 +1012,18 @@ export class ConnectionPool
   //===========================================
 
   constructor(
-    pickEndpoint: PickEndpoint,
+    connectionFactory: IConnectionFactory<C>,
     options: Required<ConnectionPoolOptions>,
     eventHandler: IEventHandler = new DefaultEventHandler(),
   ) {
     super();
-    this._pickEndpoint = pickEndpoint;
+    this._connectionFactory = connectionFactory;
     this._options = options;
     this._eventHandler = eventHandler;
     this._shouldRun = true;
     this._allConnections = [];
     this._healthyConnections = [];
-    this._closingConnections = new Map<number, MultiAltEndpointsConnection>();
+    this._closingConnections = new Map<number, C>();
     this._healthyIndexSeed = 0;
 
     for (let i = 0; i < this._options.minPoolSize; i++) {
@@ -1005,7 +1045,7 @@ export class ConnectionPool
 
   waitAllOpen(
     options?: AsyncOperationOptions,
-  ): AbortablePromise<ConnectionPool> {
+  ): AbortablePromise<ConnectionPool<C>> {
     const promises = this._allConnections.map((connection) =>
       connection.waitOpen(options),
     );
@@ -1027,7 +1067,7 @@ export class ConnectionPool
 
   closeAndWait(
     options?: AsyncOperationOptions,
-  ): AbortablePromise<ConnectionPool> {
+  ): AbortablePromise<ConnectionPool<C>> {
     if (!this._shouldRun) {
       return AbortablePromise.resolve(this);
     }
@@ -1056,7 +1096,7 @@ export class ConnectionPool
       });
   }
 
-  getConnection(): MultiAltEndpointsConnection {
+  getConnection(): C {
     if (this._healthyConnections.length > 0) {
       return this._healthyConnections[this._nextHealthyIndex()];
     }
@@ -1077,34 +1117,28 @@ export class ConnectionPool
   // IEventHandler implementation
   //===========================================
 
-  onConnecting(connection: MultiAltEndpointsConnection, ...rest: any[]): void {
+  onConnecting(connection: C, ...rest: any[]): void {
     tryWith(connection, () =>
       this._eventHandler.onConnecting?.(connection, ...rest),
     );
     this.notify(Event.ON_CONNECTING, connection, ...rest);
   }
 
-  onConnected(connection: MultiAltEndpointsConnection, ...rest: any[]): void {
+  onConnected(connection: C, ...rest: any[]): void {
     tryWith(connection, () =>
       this._eventHandler.onConnected?.(connection, ...rest),
     );
     this.notify(Event.ON_CONNECTED, connection, ...rest);
   }
 
-  onDisconnecting(
-    connection: MultiAltEndpointsConnection,
-    ...rest: any[]
-  ): void {
+  onDisconnecting(connection: C, ...rest: any[]): void {
     tryWith(connection, () =>
       this._eventHandler.onDisconnecting?.(connection, ...rest),
     );
     this.notify(Event.ON_DISCONNECTING, connection, ...rest);
   }
 
-  onDisconnected(
-    connection: MultiAltEndpointsConnection,
-    ...rest: any[]
-  ): void {
+  onDisconnected(connection: C, ...rest: any[]): void {
     if (connection.isClosed()) {
       console.debug(
         `<${this.name()}>Connection was closed, will drop it: name: ${connection.name()},endpoint: ${connection.endpoint()}`,
@@ -1117,17 +1151,14 @@ export class ConnectionPool
     this.notify(Event.ON_DISCONNECTED, connection, ...rest);
   }
 
-  onCorrupted(connection: MultiAltEndpointsConnection, ...rest: any[]): void {
+  onCorrupted(connection: C, ...rest: any[]): void {
     tryWith(connection, () =>
       this._eventHandler.onCorrupted?.(connection, ...rest),
     );
     this.notify(Event.ON_CORRUPTED, connection, ...rest);
   }
 
-  onBecameUnhealthy(
-    connection: MultiAltEndpointsConnection,
-    ...rest: any[]
-  ): void {
+  onBecameUnhealthy(connection: C, ...rest: any[]): void {
     console.debug(
       `<${this.name()}>Connection became unhealthy, updating health: name: ${connection.name()}, endpoint: ${connection.endpoint()}`,
     );
@@ -1138,10 +1169,7 @@ export class ConnectionPool
     this.notify(Event.ON_BECAME_UNHEALTHY, connection, ...rest);
   }
 
-  onBecameHealthy(
-    connection: MultiAltEndpointsConnection,
-    ...rest: any[]
-  ): void {
+  onBecameHealthy(connection: C, ...rest: any[]): void {
     console.debug(
       `<${this.name()}>Connection became healthy, updating health: name: ${connection.name()}, endpoint: ${connection.endpoint()}`,
     );
@@ -1151,7 +1179,7 @@ export class ConnectionPool
     );
   }
 
-  onBecameIdle(connection: MultiAltEndpointsConnection, ...rest: any[]): void {
+  onBecameIdle(connection: C, ...rest: any[]): void {
     console.debug(
       `<${this.name()}>Connection became idle, will drop it: name: ${connection.name()}, endpoint: ${connection.endpoint()}`,
     );
@@ -1162,10 +1190,7 @@ export class ConnectionPool
     this.notify(Event.ON_BECAME_IDLE, connection, ...rest);
   }
 
-  onBecameActive(
-    connection: MultiAltEndpointsConnection,
-    ...rest: any[]
-  ): void {
+  onBecameActive(connection: C, ...rest: any[]): void {
     tryWith(connection, () =>
       this._eventHandler.onBecameActive?.(connection, ...rest),
     );
@@ -1176,22 +1201,16 @@ export class ConnectionPool
   // internal functions
   //===========================================
 
-  private _createConnection(): MultiAltEndpointsConnection {
-    return new MultiAltEndpointsConnection(
-      this._pickEndpoint,
-      this._options,
-      this,
-    );
+  private _createConnection(): C {
+    return this._connectionFactory.create(this._options, this);
   }
 
-  private _addFreshConnection(connection: MultiAltEndpointsConnection): void {
+  private _addFreshConnection(connection: C): void {
     this._allConnections.push(connection);
     this._healthyConnections.push(connection);
   }
 
-  private _updateConnectionHealth(
-    connection: MultiAltEndpointsConnection,
-  ): void {
+  private _updateConnectionHealth(connection: C): void {
     const isHealthy = connection.isHealthy();
     const healthyIndex = this._healthyConnections.indexOf(connection);
 
@@ -1202,7 +1221,7 @@ export class ConnectionPool
     }
   }
 
-  private _dropConnection(connection: MultiAltEndpointsConnection): void {
+  private _dropConnection(connection: C): void {
     if (!this._shouldRun) {
       console.debug(
         `<${this.name()}>Dropping connection, but pool is closing, just ignore it: name: ${connection.name()}, endpoint: ${connection.endpoint()}`,

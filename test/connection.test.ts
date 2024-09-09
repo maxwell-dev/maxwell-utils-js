@@ -7,10 +7,12 @@ import {
 } from "@xuchaoqian/abortable-promise";
 import { msg_types } from "maxwell-protocol";
 import {
-  Connection,
-  buildConnectionOptions,
   Event,
+  Connection,
+  ConnectionFactory,
+  buildConnectionOptions,
   MultiAltEndpointsConnection,
+  MultiAltEndpointsConnectionFactory,
   ConnectionPool,
   buildConnectionPoolOptions,
 } from "../src/index";
@@ -333,11 +335,11 @@ describe("MultiAltEndpointsConnection", () => {
   });
 });
 
-describe("ConnectionPool", () => {
+describe("ConnectionPool<Connection>", () => {
   it("initial size", async () => {
     const options = buildConnectionPoolOptions();
     const pool = new ConnectionPool(
-      () => AbortablePromise.resolve("localhost:10000"),
+      new ConnectionFactory("localhost:10000"),
       options,
     );
     await pool.waitAllOpen();
@@ -354,7 +356,81 @@ describe("ConnectionPool", () => {
         roundLogEnabled: true,
       });
       const pool = new ConnectionPool(
-        () => AbortablePromise.resolve("localhost:10000"),
+        new ConnectionFactory("localhost:10000"),
+        options,
+      );
+      try {
+        expect(pool.size()).toEqual(1);
+        await pool.waitAllOpen();
+        const conn = pool.getConnection();
+        expect(pool.size()).toEqual(1);
+        expect(conn).toBeInstanceOf(Connection);
+        const result = await conn.waitEvent(Event.ON_BECAME_UNHEALTHY);
+        expect(result[0]).toBeInstanceOf(Connection);
+        pool.getConnection();
+        expect(pool.size()).toEqual(2);
+      } finally {
+        await pool.closeAndWait();
+      }
+    },
+    10 * 1000,
+  );
+
+  it(
+    "idle timeout",
+    async () => {
+      const options = buildConnectionPoolOptions({
+        unhealthyTimeout: 5000,
+        idleTimeout: 1000,
+        roundLogEnabled: true,
+      });
+      const pool = new ConnectionPool(
+        new ConnectionFactory("localhost:10000"),
+        options,
+      );
+      try {
+        expect(pool.size()).toEqual(1);
+        await pool.waitAllOpen();
+        const conn = pool.getConnection();
+        expect(pool.size()).toEqual(1);
+        expect(conn).toBeInstanceOf(Connection);
+        const result = await conn.waitEvent(Event.ON_BECAME_IDLE);
+        expect(result[0]).toBeInstanceOf(Connection);
+        expect(pool.size()).toEqual(1);
+      } finally {
+        await pool.closeAndWait();
+      }
+    },
+    10 * 1000,
+  );
+});
+
+describe("ConnectionPool<MultiAltEndpointsConnection>", () => {
+  it("initial size", async () => {
+    const options = buildConnectionPoolOptions();
+    const pool = new ConnectionPool(
+      new MultiAltEndpointsConnectionFactory(() =>
+        AbortablePromise.resolve("localhost:10000"),
+      ),
+      options,
+    );
+    await pool.waitAllOpen();
+    expect(pool.size()).toEqual(1);
+    await pool.closeAndWait();
+  });
+
+  it(
+    "unhealthy timeout",
+    async () => {
+      const options = buildConnectionPoolOptions({
+        heartbeatInterval: 5000,
+        unhealthyTimeout: 1000,
+        roundLogEnabled: true,
+      });
+      const pool = new ConnectionPool(
+        new MultiAltEndpointsConnectionFactory(() =>
+          AbortablePromise.resolve("localhost:10000"),
+        ),
         options,
       );
       try {
@@ -383,7 +459,9 @@ describe("ConnectionPool", () => {
         roundLogEnabled: true,
       });
       const pool = new ConnectionPool(
-        () => AbortablePromise.resolve("localhost:10000"),
+        new MultiAltEndpointsConnectionFactory(() =>
+          AbortablePromise.resolve("localhost:10000"),
+        ),
         options,
       );
       try {

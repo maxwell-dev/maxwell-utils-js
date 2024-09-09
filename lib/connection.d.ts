@@ -52,6 +52,10 @@ export interface IConnection extends IListenable, Identity {
     request(msg: ProtocolMsg, options?: AsyncOperationOptions): AbortablePromise<ProtocolMsg>;
     send(msg: ProtocolMsg): void;
 }
+export type PickEndpoint = () => AbortablePromise<string>;
+export interface IConnectionFactory<C extends IConnection> {
+    create(options: Required<ConnectionOptions>, eventHandler: IEventHandler): C;
+}
 export declare class Connection extends Listenable implements IConnection {
     private _id;
     private _endpoint;
@@ -111,7 +115,11 @@ export declare class Connection extends Listenable implements IConnection {
     private _buildUrl;
     private _deleteAttachment;
 }
-type PickEndpoint = () => AbortablePromise<string>;
+export declare class ConnectionFactory implements IConnectionFactory<Connection> {
+    private _endpoint;
+    constructor(endpoint: string);
+    create(options: Required<ConnectionOptions>, eventHandler: IEventHandler): Connection;
+}
 export declare class MultiAltEndpointsConnection extends Listenable implements IConnection, IEventHandler {
     private _id;
     private _pickEndpoint;
@@ -154,9 +162,14 @@ export type ConnectionPoolOptions = {
     maxPoolSize?: number;
 } & ConnectionOptions;
 export declare function buildConnectionPoolOptions(options?: ConnectionPoolOptions): Required<ConnectionPoolOptions>;
-export declare class ConnectionPool extends Listenable implements IEventHandler, Identity {
-    private _id;
+export declare class MultiAltEndpointsConnectionFactory implements IConnectionFactory<MultiAltEndpointsConnection> {
     private _pickEndpoint;
+    constructor(pickEndpoint: PickEndpoint);
+    create(options: Required<ConnectionOptions>, eventHandler: IEventHandler): MultiAltEndpointsConnection;
+}
+export declare class ConnectionPool<C extends IConnection> extends Listenable implements IEventHandler, Identity {
+    private _id;
+    private _connectionFactory;
     private _options;
     private _eventHandler;
     private _shouldRun;
@@ -164,27 +177,26 @@ export declare class ConnectionPool extends Listenable implements IEventHandler,
     private _healthyConnections;
     private _closingConnections;
     private _healthyIndexSeed;
-    constructor(pickEndpoint: PickEndpoint, options: Required<ConnectionPoolOptions>, eventHandler?: IEventHandler);
+    constructor(connectionFactory: IConnectionFactory<C>, options: Required<ConnectionPoolOptions>, eventHandler?: IEventHandler);
     id(): number;
     name(): string;
     size(): number;
-    waitAllOpen(options?: AsyncOperationOptions): AbortablePromise<ConnectionPool>;
+    waitAllOpen(options?: AsyncOperationOptions): AbortablePromise<ConnectionPool<C>>;
     close(): void;
-    closeAndWait(options?: AsyncOperationOptions): AbortablePromise<ConnectionPool>;
-    getConnection(): MultiAltEndpointsConnection;
-    onConnecting(connection: MultiAltEndpointsConnection, ...rest: any[]): void;
-    onConnected(connection: MultiAltEndpointsConnection, ...rest: any[]): void;
-    onDisconnecting(connection: MultiAltEndpointsConnection, ...rest: any[]): void;
-    onDisconnected(connection: MultiAltEndpointsConnection, ...rest: any[]): void;
-    onCorrupted(connection: MultiAltEndpointsConnection, ...rest: any[]): void;
-    onBecameUnhealthy(connection: MultiAltEndpointsConnection, ...rest: any[]): void;
-    onBecameHealthy(connection: MultiAltEndpointsConnection, ...rest: any[]): void;
-    onBecameIdle(connection: MultiAltEndpointsConnection, ...rest: any[]): void;
-    onBecameActive(connection: MultiAltEndpointsConnection, ...rest: any[]): void;
+    closeAndWait(options?: AsyncOperationOptions): AbortablePromise<ConnectionPool<C>>;
+    getConnection(): C;
+    onConnecting(connection: C, ...rest: any[]): void;
+    onConnected(connection: C, ...rest: any[]): void;
+    onDisconnecting(connection: C, ...rest: any[]): void;
+    onDisconnected(connection: C, ...rest: any[]): void;
+    onCorrupted(connection: C, ...rest: any[]): void;
+    onBecameUnhealthy(connection: C, ...rest: any[]): void;
+    onBecameHealthy(connection: C, ...rest: any[]): void;
+    onBecameIdle(connection: C, ...rest: any[]): void;
+    onBecameActive(connection: C, ...rest: any[]): void;
     private _createConnection;
     private _addFreshConnection;
     private _updateConnectionHealth;
     private _dropConnection;
     private _nextHealthyIndex;
 }
-export {};
