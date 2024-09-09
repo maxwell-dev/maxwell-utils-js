@@ -54,7 +54,10 @@ export interface IConnection extends IListenable, Identity {
 }
 export type PickEndpoint = () => AbortablePromise<string>;
 export interface IConnectionFactory<C extends IConnection> {
-    create(options: Required<ConnectionOptions>, eventHandler: IEventHandler): C;
+    options(options: Required<ConnectionOptions>): IConnectionFactory<C>;
+    eventHandler(eventHandler: IEventHandler): IConnectionFactory<C>;
+    finish(): IConnectionFactory<C>;
+    create(): C;
 }
 export declare class Connection extends Listenable implements IConnection {
     private _id;
@@ -117,8 +120,14 @@ export declare class Connection extends Listenable implements IConnection {
 }
 export declare class ConnectionFactory implements IConnectionFactory<Connection> {
     private _endpoint;
+    private _options;
+    private _eventHandler;
+    private _isFinished;
     constructor(endpoint: string);
-    create(options: Required<ConnectionOptions>, eventHandler: IEventHandler): Connection;
+    options(options: Required<ConnectionOptions>): ConnectionFactory;
+    eventHandler(eventHandler: IEventHandler): ConnectionFactory;
+    finish(): ConnectionFactory;
+    create(): Connection;
 }
 export declare class MultiAltEndpointsConnection extends Listenable implements IConnection, IEventHandler {
     private _id;
@@ -164,8 +173,14 @@ export type ConnectionPoolOptions = {
 export declare function buildConnectionPoolOptions(options?: ConnectionPoolOptions): Required<ConnectionPoolOptions>;
 export declare class MultiAltEndpointsConnectionFactory implements IConnectionFactory<MultiAltEndpointsConnection> {
     private _pickEndpoint;
+    private _options;
+    private _eventHandler;
+    private _isFinished;
     constructor(pickEndpoint: PickEndpoint);
-    create(options: Required<ConnectionOptions>, eventHandler: IEventHandler): MultiAltEndpointsConnection;
+    options(options: Required<ConnectionOptions>): MultiAltEndpointsConnectionFactory;
+    eventHandler(eventHandler: IEventHandler): MultiAltEndpointsConnectionFactory;
+    finish(): MultiAltEndpointsConnectionFactory;
+    create(): MultiAltEndpointsConnection;
 }
 export declare class ConnectionPool<C extends IConnection> extends Listenable implements IEventHandler, Identity {
     private _id;

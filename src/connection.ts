@@ -159,7 +159,10 @@ export interface IConnection extends IListenable, Identity {
 export type PickEndpoint = () => AbortablePromise<string>;
 
 export interface IConnectionFactory<C extends IConnection> {
-  create(options: Required<ConnectionOptions>, eventHandler: IEventHandler): C;
+  options(options: Required<ConnectionOptions>): IConnectionFactory<C>;
+  eventHandler(eventHandler: IEventHandler): IConnectionFactory<C>;
+  finish(): IConnectionFactory<C>;
+  create(): C;
 }
 
 // [resolve, reject]
@@ -689,16 +692,44 @@ export class Connection extends Listenable implements IConnection {
 
 export class ConnectionFactory implements IConnectionFactory<Connection> {
   private _endpoint: string;
+  private _options!: Required<ConnectionOptions>;
+  private _eventHandler!: IEventHandler;
+  private _isFinished: boolean;
 
   constructor(endpoint: string) {
     this._endpoint = endpoint;
+    this._isFinished = false;
   }
 
-  create(
-    options: Required<ConnectionOptions>,
-    eventHandler: IEventHandler,
-  ): Connection {
-    return new Connection(this._endpoint, options, eventHandler);
+  options(options: Required<ConnectionOptions>): ConnectionFactory {
+    this._options = options;
+    return this;
+  }
+
+  eventHandler(eventHandler: IEventHandler): ConnectionFactory {
+    this._eventHandler = eventHandler;
+    return this;
+  }
+
+  finish(): ConnectionFactory {
+    if (this._isFinished) {
+      return this;
+    }
+    if (typeof this._options === "undefined") {
+      throw new Error("Failed to finish: reason: options not set");
+    }
+    if (typeof this._eventHandler === "undefined") {
+      throw new Error("Failed to finish: reason: eventHandler not set");
+    }
+    this._isFinished = true;
+    return this;
+  }
+
+  create(): Connection {
+    if (!this._isFinished) {
+      throw new Error("Failed to create connection: reason: not finished");
+    }
+    return new Connection(this._endpoint, this._options, this._eventHandler);
   }
 }
 
@@ -976,19 +1007,51 @@ export class MultiAltEndpointsConnectionFactory
   implements IConnectionFactory<MultiAltEndpointsConnection>
 {
   private _pickEndpoint: PickEndpoint;
+  private _options!: Required<ConnectionOptions>;
+  private _eventHandler!: IEventHandler;
+  private _isFinished: boolean;
 
   constructor(pickEndpoint: PickEndpoint) {
     this._pickEndpoint = pickEndpoint;
+    this._isFinished = false;
   }
 
-  create(
+  options(
     options: Required<ConnectionOptions>,
+  ): MultiAltEndpointsConnectionFactory {
+    this._options = options;
+    return this;
+  }
+
+  eventHandler(
     eventHandler: IEventHandler,
-  ): MultiAltEndpointsConnection {
+  ): MultiAltEndpointsConnectionFactory {
+    this._eventHandler = eventHandler;
+    return this;
+  }
+
+  finish(): MultiAltEndpointsConnectionFactory {
+    if (this._isFinished) {
+      return this;
+    }
+    if (typeof this._options === "undefined") {
+      throw new Error("Failed to finish: reason: options not set");
+    }
+    if (typeof this._eventHandler === "undefined") {
+      throw new Error("Failed to finish: reason: eventHandler not set");
+    }
+    this._isFinished = true;
+    return this;
+  }
+
+  create(): MultiAltEndpointsConnection {
+    if (!this._isFinished) {
+      throw new Error("Failed to create connection: reason: not finished");
+    }
     return new MultiAltEndpointsConnection(
       this._pickEndpoint,
-      options,
-      eventHandler,
+      this._options,
+      this._eventHandler,
     );
   }
 }
@@ -1017,7 +1080,10 @@ export class ConnectionPool<C extends IConnection>
     eventHandler: IEventHandler = new DefaultEventHandler(),
   ) {
     super();
-    this._connectionFactory = connectionFactory;
+    this._connectionFactory = connectionFactory
+      .options(options)
+      .eventHandler(this)
+      .finish();
     this._options = options;
     this._eventHandler = eventHandler;
     this._shouldRun = true;
@@ -1202,7 +1268,7 @@ export class ConnectionPool<C extends IConnection>
   //===========================================
 
   private _createConnection(): C {
-    return this._connectionFactory.create(this._options, this);
+    return this._connectionFactory.create();
   }
 
   private _addFreshConnection(connection: C): void {

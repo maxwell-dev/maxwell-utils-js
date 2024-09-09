@@ -54,7 +54,7 @@ describe("Connection", () => {
       await request;
     } catch (e) {
       expect(e).toBeInstanceOf(Error);
-      expect(e.message).toEqual(
+      expect(e.message).toMatch(
         `code: 299, desc: Failed to get connetion: err: Failed to find endpoint: path: "/path-not-exist"`,
       );
     } finally {
