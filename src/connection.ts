@@ -802,6 +802,10 @@ export class MultiAltEndpointsConnection
     return this._connection !== null && this._connection.isOpen();
   }
 
+  isClosed(): boolean {
+    return !this._shouldRun && this._readyState === ReadyState.CLOSED;
+  }
+
   waitOpen(
     options: AsyncOperationOptions = {},
   ): AbortablePromise<MultiAltEndpointsConnection> {
@@ -812,10 +816,6 @@ export class MultiAltEndpointsConnection
       };
     }
     return this._openCondition.wait(options);
-  }
-
-  isClosed(): boolean {
-    return !this._shouldRun && this._readyState === ReadyState.CLOSED;
   }
 
   close(): void {
