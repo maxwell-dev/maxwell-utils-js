@@ -147,8 +147,8 @@ export declare class MultiAltEndpointsConnection extends Listenable implements I
     endpoint(): string | undefined;
     isHealthy(): boolean;
     isOpen(): boolean;
-    waitOpen(options?: AsyncOperationOptions): AbortablePromise<MultiAltEndpointsConnection>;
     isClosed(): boolean;
+    waitOpen(options?: AsyncOperationOptions): AbortablePromise<MultiAltEndpointsConnection>;
     close(): void;
     closeAndWait(options?: AsyncOperationOptions): AbortablePromise<MultiAltEndpointsConnection>;
     request(msg: any, options?: AsyncOperationOptions): AbortablePromise<ProtocolMsg>;
